@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import Markdown from 'react-markdown';
+import { Check, Link2, LoaderCircle, Unlink } from 'lucide-react';
 import './Skills.css';
 
 interface SkillApps {
@@ -63,6 +64,7 @@ export function Skills() {
     const [confirmInput, setConfirmInput] = useState('');
     const [remoteMode, setRemoteMode] = useState<string>('off');
     const [syncingServer, setSyncingServer] = useState(false);
+    const [linkingApp, setLinkingApp] = useState<string | null>(null);
 
     // 新仓库表单
     const [newOwner, setNewOwner] = useState('');
@@ -79,7 +81,7 @@ export function Skills() {
             if (rescan) {
                 const count = await invoke<number>('scan_and_import_skills');
                 if (count > 0) {
-                    showMsg('success', `自动导入 ${count} 个新 skill`);
+                    showMsg('success', `Đã tự nhập ${count} skill mới`);
                 }
             }
             const list = await invoke<InstalledSkill[]>('get_installed_skills');
@@ -115,9 +117,9 @@ export function Skills() {
         try {
             const list = await invoke<DiscoverableSkill[]>('discover_skills');
             setDiscovered(list);
-            showMsg('success', `发现 ${list.length} 个 skill`);
+            showMsg('success', `Đã tìm thấy ${list.length} skill`);
         } catch (e) {
-            showMsg('error', `发现失败: ${e}`);
+            showMsg('error', `Không thể tìm skill: ${e}`);
         } finally {
             setLoading(false);
         }
@@ -127,12 +129,12 @@ export function Skills() {
         setLoading(true);
         try {
             await invoke('install_skill', { skillJson: JSON.stringify(skill) });
-            showMsg('success', `已安装 ${skill.name}`);
+            showMsg('success', `Đã cài ${skill.name}`);
             await loadInstalled();
             // 标记为已安装
             setDiscovered(prev => prev.map(s => s.key === skill.key ? { ...s, installed: true } : s));
         } catch (e) {
-            showMsg('error', `安装失败: ${e}`);
+            showMsg('error', `Không thể cài đặt: ${e}`);
         } finally {
             setLoading(false);
         }
@@ -147,12 +149,12 @@ export function Skills() {
         if (!confirmDelete) return;
         try {
             await invoke('uninstall_skill', { skillId: confirmDelete.id });
-            showMsg('success', `已卸载 ${confirmDelete.name}`);
+            showMsg('success', `Đã gỡ ${confirmDelete.name}`);
             setConfirmDelete(null);
             setConfirmInput('');
             await loadInstalled();
         } catch (e) {
-            showMsg('error', `卸载失败: ${e}`);
+            showMsg('error', `Không thể gỡ: ${e}`);
         }
     };
 
@@ -162,17 +164,22 @@ export function Skills() {
             const content = await invoke<string>('get_skill_content', { directory: skill.directory });
             setDetailContent(content);
         } catch {
-            setDetailContent('无法读取 SKILL.md');
+            setDetailContent('Không đọc được SKILL.md');
         }
     };
 
     const handleToggleAppLink = async (app: string, enabled: boolean) => {
+        if (linkingApp) return;
+        setLinkingApp(app);
         try {
             await invoke('toggle_skill_app_link', { app, enabled });
-            showMsg('success', enabled ? `${app} 已链接到 Skills` : `${app} 已断开链接`);
+            setAppStatus(prev => ({ ...prev, [app]: enabled }));
+            showMsg('success', enabled ? `Đã liên kết ${app}` : `Đã ngắt liên kết ${app}`);
             await loadAppStatus();
         } catch (e) {
-            showMsg('error', `操作失败: ${e}`);
+            showMsg('error', `Không thể thay đổi liên kết: ${e}`);
+        } finally {
+            setLinkingApp(null);
         }
     };
 
@@ -180,7 +187,7 @@ export function Skills() {
         if (!newOwner || !newName) return;
         try {
             await invoke('add_skill_repo', { owner: newOwner, name: newName, branch: newBranch });
-            showMsg('success', `已添加 ${newOwner}/${newName}`);
+            showMsg('success', `Đã thêm ${newOwner}/${newName}`);
             setNewOwner('');
             setNewName('');
             setNewBranch('main');
@@ -202,9 +209,9 @@ export function Skills() {
     const handleSyncAll = async () => {
         try {
             await invoke('sync_all_skills');
-            showMsg('success', '同步完成');
+            showMsg('success', 'Đồng bộ hoàn tất');
         } catch (e) {
-            showMsg('error', `同步失败: ${e}`);
+            showMsg('error', `Đồng bộ thất bại: ${e}`);
         }
     };
 
@@ -215,16 +222,16 @@ export function Skills() {
             const r = await invoke<{ pushed: string[]; skipped: string[]; errors: [string, string][] }>(
                 'remote_sync_skills'
             );
-            const parts = [`推送 ${r.pushed.length}`];
-            if (r.skipped.length) parts.push(`跳过 ${r.skipped.length}`);
-            if (r.errors.length) parts.push(`失败 ${r.errors.length}`);
+            const parts = [`Đã đẩy ${r.pushed.length}`];
+            if (r.skipped.length) parts.push(`bỏ qua ${r.skipped.length}`);
+            if (r.errors.length) parts.push(`lỗi ${r.errors.length}`);
             if (r.errors.length) {
-                showMsg('error', `${parts.join('，')}：${r.errors[0][0]} - ${r.errors[0][1]}`);
+                showMsg('error', `${parts.join(', ')}: ${r.errors[0][0]} - ${r.errors[0][1]}`);
             } else {
-                showMsg('success', parts.join('，'));
+                showMsg('success', parts.join(', '));
             }
         } catch (e) {
-            showMsg('error', `同步到 Server 失败: ${e}`);
+            showMsg('error', `Không thể đồng bộ lên máy chủ: ${e}`);
         } finally {
             setSyncingServer(false);
         }
@@ -243,16 +250,19 @@ export function Skills() {
     return (
         <div className="skills-page">
             <div className="skills-header">
-                <h2>Skills</h2>
+                <div>
+                    <h2>Kỹ năng</h2>
+                    <p className="skills-subtitle">Quản lý skill dùng chung và ứng dụng CLI được liên kết</p>
+                </div>
                 <div className="skills-tabs">
                     <button className={`tab-btn ${tab === 'installed' ? 'active' : ''}`} onClick={() => { setTab('installed'); loadInstalled(true); }}>
-                        已安装 ({installed.length})
+                        Đã cài ({installed.length})
                     </button>
                     <button className={`tab-btn ${tab === 'discover' ? 'active' : ''}`} onClick={() => { setTab('discover'); if (discovered.length === 0) handleDiscover(); }}>
-                        发现
+                        Khám phá
                     </button>
                     <button className={`tab-btn ${tab === 'repos' ? 'active' : ''}`} onClick={() => setTab('repos')}>
-                        仓库
+                        Kho nguồn
                     </button>
                 </div>
             </div>
@@ -264,29 +274,29 @@ export function Skills() {
             <div className="skills-search">
                 <input
                     type="text"
-                    placeholder="搜索 skill..."
+                    placeholder="Tìm theo tên hoặc mô tả skill..."
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                     className="search-input"
                 />
                 {tab === 'installed' && (
                     <>
-                        <button className="btn btn-sm btn-ghost" onClick={handleSyncAll}>全量同步</button>
+                        <button className="btn btn-sm btn-ghost" onClick={handleSyncAll}>Đồng bộ tất cả</button>
                         {remoteMode === 'client' && (
                             <button
                                 className="btn btn-sm btn-ghost"
                                 onClick={handleSyncToServer}
                                 disabled={syncingServer}
-                                title="将本机 SSOT 下所有 skill 推送到 Server（按黑名单跳过）"
+                                title="Đẩy toàn bộ skill cục bộ lên máy chủ, bỏ qua danh sách chặn"
                             >
-                                {syncingServer ? '同步中...' : '同步到 Server'}
+                                {syncingServer ? 'Đang đồng bộ...' : 'Đồng bộ lên máy chủ'}
                             </button>
                         )}
                     </>
                 )}
                 {tab === 'discover' && (
                     <button className="btn btn-sm btn-primary" onClick={handleDiscover} disabled={loading}>
-                        {loading ? '扫描中...' : '刷新'}
+                        {loading ? 'Đang quét...' : 'Làm mới'}
                     </button>
                 )}
             </div>
@@ -294,42 +304,54 @@ export function Skills() {
             {/* 已安装列表 */}
             {tab === 'installed' && (
                 <>
-                    {/* CLI 同步状态 */}
+                    {/* Trạng thái liên kết CLI */}
                     <div className="app-sync-bar">
                         {APPS.map(app => (
-                            <label key={app} className={`app-sync-item ${appStatus[app] ? 'linked' : ''}`}>
-                                <input
-                                    type="checkbox"
-                                    checked={appStatus[app] || false}
-                                    onChange={e => handleToggleAppLink(app, e.target.checked)}
-                                />
-                                <span>{app}</span>
-                                <span className="link-status">{appStatus[app] ? '已链接' : '未链接'}</span>
-                            </label>
+                            <button
+                                type="button"
+                                key={app}
+                                className={`app-sync-item ${appStatus[app] ? 'linked' : ''}`}
+                                role="switch"
+                                aria-checked={appStatus[app] || false}
+                                disabled={linkingApp !== null}
+                                onClick={() => void handleToggleAppLink(app, !appStatus[app])}
+                                title={appStatus[app] ? `Ngắt liên kết ${app}` : `Liên kết ${app}`}
+                            >
+                                <span className="app-sync-icon" aria-hidden="true">
+                                    {linkingApp === app
+                                        ? <LoaderCircle size={15} className="spinning" />
+                                        : appStatus[app] ? <Check size={15} /> : <Unlink size={14} />}
+                                </span>
+                                <span className="app-sync-copy">
+                                    <strong>{app}</strong>
+                                    <small>{appStatus[app] ? 'Đã liên kết' : 'Chưa liên kết'}</small>
+                                </span>
+                                <Link2 size={14} className="app-sync-link" aria-hidden="true" />
+                            </button>
                         ))}
                     </div>
 
                     <div className="skills-list">
                         {filtered.length === 0 ? (
-                            <div className="skills-empty">暂无已安装的 skill</div>
+                            <div className="skills-empty">Chưa có skill nào được cài</div>
                         ) : filtered.map(skill => (
                             <div key={skill.id} className="skill-card" onClick={() => handleOpenDetail(skill)} style={{ cursor: 'pointer' }}>
                                 <div className="skill-info">
                                     <div className="skill-name">{skill.name}</div>
-                                    <div className="skill-desc">{skill.description || '无描述'}</div>
+                                    <div className="skill-desc">{skill.description || 'Không có mô tả'}</div>
                                     <div className="skill-meta">
                                         {skill.source === 'github' && skill.repo_owner && (
                                             <span className="skill-source">{skill.repo_owner}/{skill.repo_name}</span>
                                         )}
-                                        {skill.source === 'local' && <span className="skill-source">本地</span>}
+                                        {skill.source === 'local' && <span className="skill-source">Cục bộ</span>}
                                     </div>
                                 </div>
                                 <button
                                     className="btn btn-sm btn-danger"
                                     onClick={(e) => { e.stopPropagation(); handleUninstall(skill.id, skill.name); }}
-                                    title="卸载"
+                                    title="Gỡ skill"
                                 >
-                                    删除
+                                    Gỡ
                                 </button>
                             </div>
                         ))}
@@ -340,28 +362,28 @@ export function Skills() {
             {/* 发现列表 */}
             {tab === 'discover' && (
                 <div className="skills-list">
-                    {loading && <div className="skills-empty">正在扫描 GitHub 仓库...</div>}
+                    {loading && <div className="skills-empty">Đang quét kho GitHub...</div>}
                     {!loading && filteredDiscover.length === 0 && (
-                        <div className="skills-empty">点击"刷新"从仓库发现 skill</div>
+                        <div className="skills-empty">Nhấn “Làm mới” để tìm skill trong các kho nguồn</div>
                     )}
                     {filteredDiscover.map(skill => (
                         <div key={skill.key} className="skill-card">
                             <div className="skill-info">
                                 <div className="skill-name">{skill.name}</div>
-                                <div className="skill-desc">{skill.description || '无描述'}</div>
+                                <div className="skill-desc">{skill.description || 'Không có mô tả'}</div>
                                 <div className="skill-meta">
                                     <span className="skill-source">{skill.repo_owner}/{skill.repo_name}</span>
                                 </div>
                             </div>
                             {skill.installed ? (
-                                <span className="skill-installed-badge">已安装</span>
+                                <span className="skill-installed-badge">Đã cài</span>
                             ) : (
                                 <button
                                     className="btn btn-sm btn-primary"
                                     onClick={() => handleInstall(skill)}
                                     disabled={loading}
                                 >
-                                    安装
+                                    Cài đặt
                                 </button>
                             )}
                         </div>
@@ -383,7 +405,7 @@ export function Skills() {
                                     className="btn btn-sm btn-danger"
                                     onClick={() => handleRemoveRepo(repo.owner, repo.name)}
                                 >
-                                    移除
+                                    Xóa kho
                                 </button>
                             </div>
                         ))}
@@ -393,7 +415,7 @@ export function Skills() {
                         <span>/</span>
                         <input placeholder="repo" value={newName} onChange={e => setNewName(e.target.value)} className="repo-input" />
                         <input placeholder="branch" value={newBranch} onChange={e => setNewBranch(e.target.value)} className="repo-input small" />
-                        <button className="btn btn-sm btn-primary" onClick={handleAddRepo}>添加</button>
+                        <button className="btn btn-sm btn-primary" onClick={handleAddRepo}>Thêm kho</button>
                     </div>
                 </div>
             )}
@@ -402,13 +424,13 @@ export function Skills() {
                 <div className="skill-detail-overlay" onClick={() => setConfirmDelete(null)}>
                     <div className="skill-detail-modal confirm-delete-modal" onClick={e => e.stopPropagation()}>
                         <div className="detail-header">
-                            <h2>确认卸载</h2>
+                            <h2>Xác nhận gỡ skill</h2>
                             <button className="detail-close" onClick={() => setConfirmDelete(null)}>✕</button>
                         </div>
                         <div className="detail-content">
-                            <p>即将卸载 <strong>{confirmDelete.name}</strong>，此操作将从所有 CLI 目录移除该 skill。</p>
+                            <p>Skill <strong>{confirmDelete.name}</strong> sẽ bị gỡ khỏi tất cả thư mục CLI đã liên kết.</p>
                             <p style={{ marginTop: '12px', color: 'var(--text-secondary)' }}>
-                                请输入 skill 名称 <code>{confirmDelete.name}</code> 以确认：
+                                Nhập tên skill <code>{confirmDelete.name}</code> để xác nhận:
                             </p>
                             <input
                                 type="text"
@@ -426,13 +448,13 @@ export function Skills() {
                             />
                         </div>
                         <div className="detail-footer">
-                            <button className="btn btn-sm btn-ghost" onClick={() => setConfirmDelete(null)}>取消</button>
+                            <button className="btn btn-sm btn-ghost" onClick={() => setConfirmDelete(null)}>Hủy</button>
                             <button
                                 className="btn btn-sm btn-danger"
                                 disabled={confirmInput !== confirmDelete.name}
                                 onClick={executeUninstall}
                             >
-                                确认卸载
+                                Gỡ skill
                             </button>
                         </div>
                     </div>
@@ -458,7 +480,7 @@ export function Skills() {
                                 className="btn btn-sm btn-danger"
                                 onClick={() => { handleUninstall(detailSkill.id, detailSkill.name); setDetailSkill(null); }}
                             >
-                                卸载
+                                Gỡ skill
                             </button>
                         </div>
                     </div>

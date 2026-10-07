@@ -18,6 +18,12 @@
     color: var(--text-primary);
 }
 
+.skills-subtitle {
+    margin: 4px 0 0;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
 .skills-tabs {
     display: flex;
     gap: 4px;
@@ -73,45 +79,112 @@
 
 /* CLI 同步状态栏 */
 .app-sync-bar {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 16px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
 }
 
 .app-sync-item {
-    flex: 1;
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 14px;
+    gap: 10px;
+    min-width: 0;
+    min-height: 58px;
+    padding: 9px 10px;
     background: var(--card-bg);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
+    border-radius: 12px;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
     font-size: 13px;
     font-weight: 500;
     color: var(--text-secondary);
+    font-family: inherit;
+    text-align: left;
+    appearance: none;
+}
+
+.app-sync-item:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--primary-color) 48%, var(--border-color));
+    background: color-mix(in srgb, var(--primary-color) 5%, var(--card-bg));
+    box-shadow: 0 5px 14px rgba(15, 23, 42, 0.08);
+    transform: translateY(-1px);
+}
+
+.app-sync-item:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--primary-color) 68%, transparent);
+    outline-offset: 2px;
+}
+
+.app-sync-item:disabled {
+    cursor: wait;
+    opacity: 0.72;
 }
 
 .app-sync-item.linked {
     border-color: var(--success-color);
-    background: rgba(16, 185, 129, 0.05);
+    background: color-mix(in srgb, var(--success-color) 7%, var(--card-bg));
 }
 
-.app-sync-item input {
-    accent-color: var(--success-color);
-    cursor: pointer;
-}
-
-.link-status {
-    margin-left: auto;
-    font-size: 11px;
+.app-sync-icon {
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
     color: var(--text-muted);
+    background: var(--section-bg);
+    border: 1px solid var(--border-color);
 }
 
-.app-sync-item.linked .link-status {
+.app-sync-item.linked .app-sync-icon {
+    color: white;
+    border-color: var(--success-color);
+    background: var(--success-color);
+    box-shadow: 0 3px 8px color-mix(in srgb, var(--success-color) 28%, transparent);
+}
+
+.app-sync-copy {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.app-sync-copy strong {
+    overflow: hidden;
+    color: var(--text-primary);
+    font-size: 12px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    text-transform: capitalize;
+    white-space: nowrap;
+}
+
+.app-sync-copy small {
+    color: var(--text-muted);
+    font-size: 10px;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.app-sync-item.linked .app-sync-copy small {
     color: var(--success-color);
+}
+
+.app-sync-link {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+    opacity: 0.42;
+}
+
+.app-sync-item.linked .app-sync-link {
+    color: var(--success-color);
+    opacity: 0.85;
 }
 
 .skills-list {

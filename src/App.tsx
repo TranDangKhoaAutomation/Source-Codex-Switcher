@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   BarChart3,
   Database,
@@ -8,6 +8,8 @@ import {
   Route,
   Settings as SettingsIcon,
   Sparkles,
+  Copy,
+  RefreshCw,
   UserPlus,
   Users,
   Zap,
@@ -35,6 +37,14 @@ import './App.css';
 import { isMacOS } from './platform';
 
 type PageType = 'dashboard' | 'accounts' | 'proxy' | 'routes' | 'stats' | 'cache' | 'skills' | 'settings';
+
+interface NetworkRepairResult {
+  repaired: boolean;
+  local_proxy_ok: boolean;
+  upstream_ok: boolean;
+  message: string;
+  windows_command?: string | null;
+}
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Tổng quan', icon: LayoutDashboard },
@@ -102,6 +112,11 @@ function App() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRelayModal, setShowRelayModal] = useState(false);
   const [schedulerError, setSchedulerError] = useState<string | null>(null);
+  const [networkRepair, setNetworkRepair] = useState<NetworkRepairResult | null>(null);
+  const [networkRepairing, setNetworkRepairing] = useState(false);
+  const [networkCommandCopied, setNetworkCommandCopied] = useState(false);
+  const networkRepairInFlight = useRef(false);
+  const [proxyNotice, setProxyNotice] = useState<string | null>(null);
   const [appVersion, setAppVersion] = useState<string | null>(null);
 
   useEffect(() => {
@@ -125,6 +140,48 @@ function App() {
     } catch { setProxyRunning(false); }
   };
 
+  const runNetworkRepair = async (silent = false, clearTransientError = false) => {
+    if (networkRepairInFlight.current) return null;
+    networkRepairInFlight.current = true;
+    if (!silent) setNetworkRepairing(true);
+    try {
+      const result = await invoke<NetworkRepairResult>('repair_network_connection');
+      if (result.local_proxy_ok && result.upstream_ok) {
+        setNetworkRepair(null);
+        if (clearTransientError) setSchedulerError(null);
+        if (result.repaired) {
+          setProxyNotice('Đã tự khôi phục proxy và kết nối mạng');
+          setTimeout(() => setProxyNotice(null), 5000);
+        }
+      } else {
+        setNetworkRepair(result);
+      }
+      await checkProxyStatus();
+      return result;
+    } catch (err) {
+      const result: NetworkRepairResult = {
+        repaired: false,
+        local_proxy_ok: false,
+        upstream_ok: false,
+        message: `Không thể tự kiểm tra kết nối: ${String(err)}`,
+        windows_command: 'ipconfig /flushdns',
+      };
+      setNetworkRepair(result);
+      return result;
+    } finally {
+      networkRepairInFlight.current = false;
+      if (!silent) setNetworkRepairing(false);
+    }
+  };
+
+  const copyNetworkFixCommand = async () => {
+    const command = networkRepair?.windows_command;
+    if (!command) return;
+    await invoke('copy_to_clipboard', { text: command });
+    setNetworkCommandCopied(true);
+    setTimeout(() => setNetworkCommandCopied(false), 2000);
+  };
+
   const checkSyncStatus = async () => {
     try {
       const status = await getSyncStatus();
@@ -137,6 +194,10 @@ function App() {
   useEffect(() => {
     checkSyncStatus();
     checkProxyStatus();
+    // Windows thường báo lỗi mạng giả trong vài giây đầu sau khi đăng nhập.
+    // Kiểm tra nền một lần và chỉ hiện hướng dẫn khi tự sửa không thành công.
+    const timer = window.setTimeout(() => { void runNetworkRepair(true); }, 1500);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const currentAccount = accounts.find(a => a.id === currentId) || null;
@@ -174,7 +235,8 @@ function App() {
       if (kind === 'permanent') {
         setSchedulerError(`Đã dừng duy trì phiên cho ${account_name}; cần đăng nhập lại · ${timestamp}`);
       } else {
-        setSchedulerError(`Tạm thời không duy trì được phiên ${account_name}: ${reason} · ${timestamp}`);
+        setSchedulerError(`Mạng đang gián đoạn khi cập nhật ${account_name}; Switcher đang tự kiểm tra và sửa… · ${timestamp}`);
+        void runNetworkRepair(true, true);
       }
     });
 
@@ -184,7 +246,6 @@ function App() {
   }, []);
 
   // 监听代理切号/封号事件
-  const [proxyNotice, setProxyNotice] = useState<string | null>(null);
   useEffect(() => {
     const unsub1 = listen<string>('proxy-account-switched', (e) => {
       const msg = `Proxy đã tự chuyển tài khoản → ${e.payload}`;
@@ -396,10 +457,27 @@ function App() {
         </nav>
       </header>
 
-      {(error || schedulerError) && (
+      {(error || schedulerError || networkRepair) && (
         <div className="error-banner">
-          {error && <div>{error}</div>}
-          {schedulerError && <div>{schedulerError}</div>}
+          <div className="error-banner-copy">
+            {error && <div>{error}</div>}
+            {schedulerError && <div>{schedulerError}</div>}
+            {networkRepair && <div>{networkRepair.message}</div>}
+          </div>
+          {networkRepair && (
+            <div className="error-banner-actions">
+              <button type="button" onClick={() => void runNetworkRepair(false, true)} disabled={networkRepairing}>
+                <RefreshCw size={14} className={networkRepairing ? 'spinning' : ''} />
+                {networkRepairing ? 'Đang sửa…' : 'Thử sửa tự động'}
+              </button>
+              {networkRepair.windows_command && (
+                <button type="button" onClick={() => void copyNetworkFixCommand()}>
+                  <Copy size={14} />
+                  {networkCommandCopied ? 'Đã sao chép' : 'Sao chép lệnh PowerShell'}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 

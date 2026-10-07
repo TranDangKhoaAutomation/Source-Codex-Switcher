@@ -44,6 +44,7 @@ use account::{Account, AccountStore};
 use chrono::Utc;
 use refresh_lock::RefreshLockManager;
 use std::net::{IpAddr, Ipv4Addr, UdpSocket};
+use std::time::Duration;
 use std::process::Command;
 use tauri::{Emitter, Manager, State};
 use usage::{UsageDisplay, UsageFetcher};
@@ -246,6 +247,114 @@ pub struct ProxyStatus {
     pub lan_base_url: Option<String>,
     pub total_requests: u64,
     pub auto_switches: u64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct NetworkRepairResult {
+    pub repaired: bool,
+    pub local_proxy_ok: bool,
+    pub upstream_ok: bool,
+    pub message: String,
+    pub windows_command: Option<String>,
+}
+
+async fn tcp_port_is_open(port: u16) -> bool {
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        tokio::net::TcpStream::connect((Ipv4Addr::LOCALHOST, port)),
+    )
+    .await
+    .is_ok_and(|result| result.is_ok())
+}
+
+async fn upstream_network_is_reachable() -> bool {
+    let client = match reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(4))
+        .timeout(Duration::from_secs(8))
+        .build()
+    {
+        Ok(client) => client,
+        Err(_) => return false,
+    };
+    // Any HTTP response proves DNS + TCP + TLS work. auth.openai.com may return
+    // a redirect/4xx for this unauthenticated probe and that is still healthy.
+    client.get("https://auth.openai.com/").send().await.is_ok()
+}
+
+/// Kiểm tra mạng khi mở ứng dụng và tự khởi động lại proxy nội bộ nếu proxy bị
+/// dừng hoặc cổng loopback chưa lắng nghe. Không tự thay đổi Winsock/WinHTTP của
+/// Windows; nếu mạng hệ thống vẫn lỗi, UI sẽ đưa lệnh DNS an toàn để người dùng chạy.
+#[tauri::command]
+async fn repair_network_connection(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<NetworkRepairResult, String> {
+    let (proxy_enabled, port, allow_lan) = {
+        let store = state.store.lock().map_err(|e| e.to_string())?;
+        (
+            store.settings.proxy_enabled,
+            store.settings.proxy_port,
+            store.settings.proxy_allow_lan,
+        )
+    };
+
+    let mut local_proxy_ok = !proxy_enabled || tcp_port_is_open(port).await;
+    let mut repaired = false;
+    if proxy_enabled && !local_proxy_ok {
+        {
+            let mut slot = state.proxy_handle.lock().map_err(|e| e.to_string())?;
+            if let Some(handle) = slot.take() {
+                handle.abort();
+            }
+            let handle = proxy::start(
+                state.store.clone(),
+                port,
+                allow_lan,
+                app,
+                state.proxy_stats.clone(),
+                state.token_tracker.clone(),
+                state.ws_disconnect.clone(),
+                state.switch_logger.clone(),
+                state.session_affinity.clone(),
+                state.session_routes.clone(),
+            );
+            *slot = Some(handle);
+        }
+        tokio::time::sleep(Duration::from_millis(450)).await;
+        local_proxy_ok = tcp_port_is_open(port).await;
+        repaired = local_proxy_ok;
+    }
+
+    let upstream_ok = upstream_network_is_reachable().await;
+    let (message, windows_command) = if local_proxy_ok && upstream_ok {
+        (
+            if repaired {
+                "Đã tự khởi động lại proxy và khôi phục kết nối.".to_string()
+            } else {
+                "Kết nối mạng và proxy đang hoạt động bình thường.".to_string()
+            },
+            None,
+        )
+    } else if !local_proxy_ok {
+        (
+            format!("Proxy nội bộ chưa mở được cổng {}.", port),
+            Some("ipconfig /flushdns".to_string()),
+        )
+    } else {
+        (
+            "Không kết nối được máy chủ OpenAI. Có thể DNS hoặc mạng vừa khởi động chưa sẵn sàng."
+                .to_string(),
+            Some("ipconfig /flushdns".to_string()),
+        )
+    };
+
+    Ok(NetworkRepairResult {
+        repaired,
+        local_proxy_ok,
+        upstream_ok,
+        message,
+        windows_command,
+    })
 }
 
 fn detect_lan_ipv4() -> Option<Ipv4Addr> {
@@ -6793,6 +6902,7 @@ pub fn run() {
             get_settings,
             update_settings,
             get_proxy_status,
+            repair_network_connection,
             kill_codex_processes,
             reopen_codex_desktop,
             set_proxy_env,
