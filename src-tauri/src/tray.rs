@@ -1,728 +1,327 @@
-use std::collections::HashMap;
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    LazyLock, Mutex,
-};
-use std::time::Duration;
-
 use tauri::{
-    menu::{CheckMenuItemBuilder, Menu, MenuItemBuilder, PredefinedMenuItem, Submenu},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, PhysicalPosition, Runtime, WebviewUrl, WebviewWindowBuilder,
-    WindowEvent,
+    image::Image,
+    menu::{Menu, MenuItem, PredefinedMenuItem},
+    tray::{TrayIcon, TrayIconBuilder, TrayIconEvent},
+    webview::WebviewWindowBuilder,
+    AppHandle, Manager,
 };
 
-use crate::{
-    api::usage::get_account_usage,
-    auth::{get_account, get_accounts_file, load_accounts, load_app_settings},
-    commands::{
-        is_codex_running_switch_block, restore_main_window, switch_account_by_id,
-        window::TRAY_WINDOW,
-    },
-    types::{AccountsStore, TrayDisplayMode, UsageInfo},
-};
+/// 初始化系统托盘
+pub fn init(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    // 加载并缩放图标
+    let icon_bytes = include_bytes!("../icons/app-icon-squircle.png");
+    let base_img =
+        image::load_from_memory(icon_bytes).map_err(|e| format!("加载图标失败: {}", e))?;
 
-static TRAY_USAGE: LazyLock<Mutex<HashMap<String, UsageInfo>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
-static TRAY_SWITCH_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-static TRAY_SWITCH_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+    let target_size = 128;
+    let content_size = 105;
+    let padding = (target_size - content_size) / 2;
 
-const TRAY_ID: &str = "codex-switcher-tray";
-const TRAY_ICON: tauri::image::Image<'static> = tauri::include_image!("./icons/tray.png");
-const TRAY_REFRESH_EVENT: &str = "tray-refresh";
-const ACCOUNTS_CHANGED_EVENT: &str = "accounts-changed";
-const SWITCH_ACCOUNT_BLOCKED_EVENT: &str = "switch-account-blocked";
-const ACCOUNT_ITEM_PREFIX: &str = "account:";
-const OPEN_ITEM_ID: &str = "open";
-const QUIT_ITEM_ID: &str = "quit";
-const TRAY_WIDTH: f64 = 300.0;
-const TRAY_HEIGHT: f64 = 420.0;
-const ACCOUNT_METADATA_REFRESH_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
+    let scaled_content = base_img.resize(
+        content_size,
+        content_size,
+        image::imageops::FilterType::Lanczos3,
+    );
+    let mut final_img = image::RgbaImage::new(target_size, target_size);
 
-#[derive(Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct SwitchAccountBlockedPayload {
-    account_id: String,
-    error: String,
-}
+    image::imageops::overlay(
+        &mut final_img,
+        &scaled_content,
+        padding as i64,
+        padding as i64,
+    );
 
-pub fn setup(app: &AppHandle) -> tauri::Result<()> {
-    #[cfg(not(target_os = "linux"))]
-    create_tray_window(app)?;
+    let (width, height) = final_img.dimensions();
+    let icon = Image::new_owned(final_img.into_raw(), width, height);
 
-    let menu = build_menu(app, &load_accounts().unwrap_or_default())?;
+    // Windows 右键需要真正挂载 native menu；仅监听 TrayIconEvent 会把右键
+    // 也当成 popup 点击，系统不会自动生成完整托盘菜单。
+    let show_main = MenuItem::with_id(app, "tray-show-main", "打开主窗口", true, None::<&str>)?;
+    let next_account = MenuItem::with_id(
+        app,
+        "tray-next-account",
+        "切换到下一个账号",
+        true,
+        None::<&str>,
+    )?;
+    let separator = PredefinedMenuItem::separator(app)?;
+    let quit = PredefinedMenuItem::quit(app, Some("退出"))?;
+    let menu = Menu::with_items(app, &[&show_main, &next_account, &separator, &quit])?;
 
-    #[cfg(target_os = "linux")]
-    let icon = app
-        .default_window_icon()
-        .cloned()
-        .expect("application icon should be configured");
-
-    #[cfg(target_os = "macos")]
-    let icon = TRAY_ICON;
-
-    #[cfg(target_os = "windows")]
-    let icon = tray_icon_for_theme(current_system_theme());
-
-    let builder = TrayIconBuilder::with_id(TRAY_ID)
+    let _tray = TrayIconBuilder::with_id("main")
         .icon(icon)
-        .tooltip("Codex Switcher")
+        .icon_as_template(false)
         .menu(&menu)
-        .on_menu_event(handle_menu_event);
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "tray-show-main" => show_main_window_from_cmd(app),
+            "tray-next-account" => {
+                let app_handle = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let state = app_handle.state::<crate::AppState>();
+                    let call_handle = app_handle.clone();
+                    if let Err(error) =
+                        crate::switch_to_next_account_internal(state, call_handle).await
+                    {
+                        eprintln!("[Tray] 切换下一个账号失败: {}", error);
+                    }
+                });
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray: &TrayIcon, event: TrayIconEvent| {
+            if let TrayIconEvent::Click {
+                button_state: tauri::tray::MouseButtonState::Up,
+                button: tauri::tray::MouseButton::Left,
+                position,
+                ..
+            } = event
+            {
+                // 左键 → 弹出 popup；右键交给 native menu（Windows 修复）。
+                toggle_popup(tray.app_handle(), position);
+            }
+        })
+        .build(app)?;
 
-    #[cfg(target_os = "macos")]
-    let builder = builder.icon_as_template(true);
-
-    #[cfg(not(target_os = "linux"))]
-    let builder = builder
-        .on_tray_icon_event(handle_tray_icon_event)
-        .show_menu_on_left_click(false);
-
-    builder.build(app)?;
-    refresh_menu(app);
-
-    watch_accounts_file(app.clone());
-    #[cfg(target_os = "windows")]
-    watch_system_theme(app.clone());
-    poll_active_account_usage(app.clone());
-    poll_account_metadata(app.clone());
+    println!("[Tray] 系统托盘已启动");
     Ok(())
 }
 
-pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
-    refresh_menu(app);
-}
+/// 显示/隐藏 tray popup 窗口
+fn toggle_popup(app: &AppHandle, position: tauri::PhysicalPosition<f64>) {
+    let label = "tray-popup";
 
-#[cfg(target_os = "windows")]
-fn update_theme<R: Runtime>(app: &AppHandle<R>, theme: tauri::Theme) {
-    let Some(tray) = app.tray_by_id(TRAY_ID) else {
+    // 如果已存在，切换显示/隐藏
+    if let Some(win) = app.get_webview_window(label) {
+        if win.is_visible().unwrap_or(false) {
+            let _ = win.hide();
+            return;
+        }
+        // 重新定位并显示
+        if let Err(error) = position_popup(&win, position) {
+            eprintln!("[Tray] Position failed: {}", error);
+            return;
+        }
+        let _ = win.show();
+        let _ = win.set_focus();
         return;
-    };
-
-    if let Err(error) = tray.set_icon(Some(tray_icon_for_theme(theme))) {
-        eprintln!("Failed to update tray icon theme: {error}");
-    }
-}
-
-#[cfg(any(target_os = "windows", test))]
-fn tray_icon_for_theme(theme: tauri::Theme) -> tauri::image::Image<'static> {
-    let mut rgba = TRAY_ICON.rgba().to_vec();
-    if theme == tauri::Theme::Dark {
-        for pixel in rgba.chunks_exact_mut(4) {
-            if pixel[3] > 0 {
-                pixel[..3].fill(255);
-            }
-        }
     }
 
-    tauri::image::Image::new_owned(rgba, TRAY_ICON.width(), TRAY_ICON.height())
-}
+    // 首次创建
+    let popup_width = 380.0;
+    let popup_height = 410.0;
 
-#[cfg(target_os = "windows")]
-fn current_system_theme() -> tauri::Theme {
-    read_system_theme().unwrap_or(tauri::Theme::Light)
-}
+    let url = tauri::WebviewUrl::App("index.html".into());
 
-#[cfg(target_os = "windows")]
-fn read_system_theme() -> Option<tauri::Theme> {
-    use windows_sys::Win32::{
-        Foundation::ERROR_SUCCESS,
-        System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD},
-    };
-
-    let subkey = wide_null(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
-    // The notification area follows Windows' system mode, which is independent of app mode.
-    let value_name = wide_null("SystemUsesLightTheme");
-    let mut value = 0_u32;
-    let mut value_size = std::mem::size_of::<u32>() as u32;
-    let status = unsafe {
-        RegGetValueW(
-            HKEY_CURRENT_USER,
-            subkey.as_ptr(),
-            value_name.as_ptr(),
-            RRF_RT_REG_DWORD,
-            std::ptr::null_mut(),
-            (&mut value as *mut u32).cast(),
-            &mut value_size,
-        )
-    };
-
-    (status == ERROR_SUCCESS).then_some(if value == 0 {
-        tauri::Theme::Dark
-    } else {
-        tauri::Theme::Light
-    })
-}
-
-#[cfg(target_os = "windows")]
-fn wide_null(value: &str) -> Vec<u16> {
-    value.encode_utf16().chain(std::iter::once(0)).collect()
-}
-
-#[cfg(target_os = "windows")]
-fn watch_system_theme<R: Runtime>(app: AppHandle<R>) {
-    std::thread::spawn(move || {
-        use windows_sys::Win32::{
-            Foundation::{CloseHandle, ERROR_SUCCESS, WAIT_OBJECT_0},
-            System::Registry::{
-                RegCloseKey, RegNotifyChangeKeyValue, RegOpenKeyExW, HKEY, HKEY_CURRENT_USER,
-                KEY_NOTIFY, REG_NOTIFY_CHANGE_LAST_SET,
-            },
-            System::Threading::{CreateEventW, WaitForSingleObject, INFINITE},
-        };
-
-        let subkey = wide_null(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
-        let mut key: HKEY = std::ptr::null_mut();
-        let open_status =
-            unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, subkey.as_ptr(), 0, KEY_NOTIFY, &mut key) };
-        if open_status != ERROR_SUCCESS {
-            eprintln!("Failed to watch Windows system theme: {open_status}");
-            return;
-        }
-
-        let event = unsafe { CreateEventW(std::ptr::null(), 0, 0, std::ptr::null()) };
-        if event.is_null() {
-            eprintln!("Failed to create Windows system theme event");
-            unsafe {
-                RegCloseKey(key);
-            }
-            return;
-        }
-
-        loop {
-            let status =
-                unsafe { RegNotifyChangeKeyValue(key, 0, REG_NOTIFY_CHANGE_LAST_SET, event, 1) };
-            if status != ERROR_SUCCESS {
-                eprintln!("Failed to watch Windows system theme: {status}");
-                break;
-            }
-
-            if let Some(theme) = read_system_theme() {
-                update_theme(&app, theme);
-            }
-
-            let wait_status = unsafe { WaitForSingleObject(event, INFINITE) };
-            if wait_status != WAIT_OBJECT_0 {
-                eprintln!("Failed waiting for Windows system theme change: {wait_status}");
-                break;
-            }
-        }
-
-        unsafe {
-            CloseHandle(event);
-            RegCloseKey(key);
-        }
-    });
-}
-
-/// Store usage reported by the main app and refresh the native menu labels.
-pub fn ingest_usage<R: Runtime>(app: &AppHandle<R>, usages: Vec<UsageInfo>) {
-    if let Ok(mut cache) = TRAY_USAGE.lock() {
-        for usage in usages {
-            cache.insert(usage.account_id.clone(), usage);
-        }
-    }
-    refresh_menu(app);
-}
-
-// ============================================================================
-// React popup window (used on macOS/Windows via tray click events)
-// ============================================================================
-
-#[cfg_attr(target_os = "linux", allow(dead_code))]
-fn create_tray_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
-    if app.get_webview_window(TRAY_WINDOW).is_some() {
-        return Ok(());
-    }
-
-    let window = WebviewWindowBuilder::new(app, TRAY_WINDOW, WebviewUrl::App("tray.html".into()))
+    match WebviewWindowBuilder::new(app, label, url)
         .title("Codex Switcher")
-        .inner_size(TRAY_WIDTH, TRAY_HEIGHT)
+        .inner_size(popup_width, popup_height)
         .resizable(false)
         .decorations(false)
         .transparent(true)
+        .shadow(false)
         .always_on_top(true)
         .skip_taskbar(true)
         .visible(false)
-        .build()?;
-
-    // Hide the popup as soon as it loses focus so it behaves like a native menu.
-    let app_handle = app.clone();
-    window.on_window_event(move |event| {
-        if let WindowEvent::Focused(false) = event {
-            if let Some(window) = app_handle.get_webview_window(TRAY_WINDOW) {
-                let _ = window.hide();
-            }
-        }
-    });
-
-    Ok(())
-}
-
-#[cfg_attr(target_os = "linux", allow(dead_code))]
-fn handle_tray_icon_event<R: Runtime>(tray: &tauri::tray::TrayIcon<R>, event: TrayIconEvent) {
-    if let TrayIconEvent::Click {
-        button: MouseButton::Left,
-        button_state: MouseButtonState::Up,
-        position,
-        ..
-    } = event
+        .build()
     {
-        toggle_tray_window(tray.app_handle(), position);
-    }
-}
+        Ok(win) => {
+            // 监听焦点丢失 → 自动隐藏
+            let win_clone = win.clone();
+            win.on_window_event(move |event| {
+                if let tauri::WindowEvent::Focused(false) = event {
+                    let _ = win_clone.hide();
+                }
+            });
 
-#[cfg_attr(target_os = "linux", allow(dead_code))]
-fn toggle_tray_window<R: Runtime>(app: &AppHandle<R>, cursor: PhysicalPosition<f64>) {
-    let Some(window) = app.get_webview_window(TRAY_WINDOW) else {
-        return;
-    };
-
-    if window.is_visible().unwrap_or(false) {
-        let _ = window.hide();
-        return;
-    }
-
-    position_near_cursor(&window, cursor);
-    let _ = window.show();
-    let _ = window.set_focus();
-    let _ = app.emit_to(TRAY_WINDOW, TRAY_REFRESH_EVENT, ());
-}
-
-#[cfg_attr(target_os = "linux", allow(dead_code))]
-fn position_near_cursor<R: Runtime>(
-    window: &tauri::WebviewWindow<R>,
-    cursor: PhysicalPosition<f64>,
-) {
-    let size = window.outer_size().ok();
-    let width = size.map(|s| s.width as f64).unwrap_or(TRAY_WIDTH);
-    let height = size.map(|s| s.height as f64).unwrap_or(TRAY_HEIGHT);
-
-    let x = (cursor.x - width / 2.0).max(0.0);
-    // macOS menu bar sits at the top, so drop the popup below the icon.
-    // Other platforms keep the tray at the bottom, so float it above the cursor.
-    let y = if cfg!(target_os = "macos") {
-        cursor.y + 4.0
-    } else {
-        (cursor.y - height - 4.0).max(0.0)
-    };
-
-    let _ = window.set_position(PhysicalPosition::new(x, y));
-}
-
-// ============================================================================
-// Native menu (the only tray interaction on Linux; right-click on macOS/Windows)
-// ============================================================================
-
-fn build_menu<R: Runtime>(app: &AppHandle<R>, store: &AccountsStore) -> tauri::Result<Menu<R>> {
-    let menu = Menu::new(app)?;
-
-    if store.accounts.is_empty() {
-        menu.append(
-            &MenuItemBuilder::with_id("empty", "No accounts configured")
-                .enabled(false)
-                .build(app)?,
-        )?;
-    } else {
-        for account in &store.accounts {
-            let label = format!("{}{}", account.name, usage_suffix(&account.id));
-            let item =
-                CheckMenuItemBuilder::with_id(account_menu_id(&account.id), menu_label(&label))
-                    .checked(store.active_account_id.as_deref() == Some(&account.id))
-                    .build(app)?;
-            menu.append(&item)?;
+            if let Err(error) = position_popup(&win, position) {
+                eprintln!("[Tray] Position failed: {}", error);
+                return;
+            }
+            let _ = win.show();
+            let _ = win.set_focus();
         }
+        Err(e) => eprintln!("[Tray] 创建 popup 窗口失败: {}", e),
     }
-
-    menu.append(&PredefinedMenuItem::separator(app)?)?;
-    #[cfg(target_os = "macos")]
-    append_dock_settings_menu(app, &menu)?;
-    #[cfg(target_os = "macos")]
-    menu.append(&PredefinedMenuItem::separator(app)?)?;
-    menu.append(&MenuItemBuilder::with_id(OPEN_ITEM_ID, "Open Codex Switcher").build(app)?)?;
-    menu.append(&MenuItemBuilder::with_id(QUIT_ITEM_ID, "Quit").build(app)?)?;
-    Ok(menu)
 }
 
-#[cfg(target_os = "macos")]
-fn append_dock_settings_menu<R: Runtime>(app: &AppHandle<R>, menu: &Menu<R>) -> tauri::Result<()> {
-    let settings = load_app_settings().unwrap_or_default();
-    let dock_settings = Submenu::with_items(
-        app,
-        "Dock Icon",
-        true,
-        &[
-            &CheckMenuItemBuilder::with_id(crate::app_menu::DOCK_SHOW_IN_DOCK_ID, "Show in Dock")
-                .checked(settings.dock_display_mode == crate::app_menu::DockDisplayMode::ShowInDock)
-                .build(app)?,
-            &CheckMenuItemBuilder::with_id(crate::app_menu::DOCK_MENU_BAR_ONLY_ID, "Menu Bar Only")
-                .checked(
-                    settings.dock_display_mode == crate::app_menu::DockDisplayMode::MenuBarOnly,
-                )
-                .build(app)?,
-        ],
-    )?;
-    menu.append(&dock_settings)?;
+/// Use the clicked monitor's physical work area, including its taskbar and DPI.
+fn position_popup(
+    win: &tauri::WebviewWindow,
+    tray_pos: tauri::PhysicalPosition<f64>,
+) -> Result<(), String> {
+    let monitor = match win
+        .monitor_from_point(tray_pos.x, tray_pos.y)
+        .map_err(|e| e.to_string())?
+    {
+        Some(monitor) => monitor,
+        None => match win.current_monitor().map_err(|e| e.to_string())? {
+            Some(monitor) => monitor,
+            None => win
+                .primary_monitor()
+                .map_err(|e| e.to_string())?
+                .ok_or("No monitor available for tray popup")?,
+        },
+    };
+    let area = monitor.work_area();
+    let rect = crate::tray_position::place(
+        (tray_pos.x, tray_pos.y),
+        (area.position.x, area.position.y),
+        (area.size.width, area.size.height),
+        monitor.scale_factor(),
+    )
+    .ok_or("Invalid tray monitor work area")?;
+    win.set_position(tauri::PhysicalPosition::new(rect.x, rect.y))
+        .map_err(|e| e.to_string())?;
+    win.set_size(tauri::PhysicalSize::new(rect.width, rect.height))
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
-fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
-    let item_id = event.id().as_ref();
-
-    #[cfg(target_os = "macos")]
-    if let Some(mode) = crate::app_menu::dock_display_mode_for_item(item_id) {
-        crate::app_menu::update_dock_display_mode(app, mode);
-        return;
-    }
-
-    match item_id {
-        OPEN_ITEM_ID => show_main_window(app),
-        QUIT_ITEM_ID => app.exit(0),
-        _ => {
-            let Some(account_id) = item_id.strip_prefix(ACCOUNT_ITEM_PREFIX) else {
-                return;
-            };
-
-            let app = app.clone();
-            let account_id = account_id.to_string();
-            let request_sequence = TRAY_SWITCH_SEQUENCE.fetch_add(1, Ordering::AcqRel) + 1;
-            tauri::async_runtime::spawn(async move {
-                let _tray_switch_guard = TRAY_SWITCH_LOCK.lock().await;
-                if request_sequence != TRAY_SWITCH_SEQUENCE.load(Ordering::Acquire) {
-                    return;
-                }
-
-                if let Err(error) = switch_account_by_id(&account_id).await {
-                    eprintln!("Failed to switch account from tray: {error}");
-                    refresh_menu(&app);
-                    if is_codex_running_switch_block(&error) {
-                        show_main_window(&app);
-                        let _ = app.emit(
-                            SWITCH_ACCOUNT_BLOCKED_EVENT,
-                            SwitchAccountBlockedPayload { account_id, error },
-                        );
-                    }
-                    return;
-                }
-
-                refresh_menu(&app);
-                let _ = app.emit(ACCOUNTS_CHANGED_EVENT, ());
-            });
+pub fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        if let Err(error) = fit_main_window_to_work_area(&window) {
+            eprintln!("[Window] Could not fit main window to work area: {}", error);
         }
+        let _ = window.show();
+        let _ = window.set_focus();
+        #[cfg(target_os = "macos")]
+        app.set_activation_policy(tauri::ActivationPolicy::Regular)
+            .unwrap_or(());
     }
 }
 
-fn refresh_menu<R: Runtime>(app: &AppHandle<R>) {
-    let app_handle = app.clone();
-    if let Err(error) = app.run_on_main_thread(move || {
-        refresh_menu_on_main_thread(&app_handle);
-    }) {
-        eprintln!("Failed to schedule tray menu refresh: {error}");
-    }
+#[derive(Debug, PartialEq)]
+struct MainWindowRect {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
 }
 
-fn refresh_menu_on_main_thread<R: Runtime>(app: &AppHandle<R>) {
-    let Some(tray) = app.tray_by_id(TRAY_ID) else {
-        return;
+/// Keep the restored main window completely inside the active monitor's work
+/// area. Windows remembers the last physical position, which can become invalid
+/// after a DPI, resolution, taskbar, or monitor-layout change. That used to put
+/// the right side of the navigation off-screen and made existing items look as
+/// if they were missing.
+fn main_window_rect(
+    current_pos: (i32, i32),
+    current_size: (u32, u32),
+    work_origin: (i32, i32),
+    work_size: (u32, u32),
+    scale: f64,
+) -> Option<MainWindowRect> {
+    if work_size.0 == 0 || work_size.1 == 0 || !scale.is_finite() || scale <= 0.0 {
+        return None;
+    }
+
+    let margin = (12.0 * scale).round().max(0.0) as u32;
+    let horizontal_margin = margin.saturating_mul(2).min(work_size.0.saturating_sub(1));
+    let vertical_margin = margin.saturating_mul(2).min(work_size.1.saturating_sub(1));
+    let max_width = work_size.0.saturating_sub(horizontal_margin).max(1);
+    let max_height = work_size.1.saturating_sub(vertical_margin).max(1);
+    let width = current_size.0.max(1).min(max_width);
+    let height = current_size.1.max(1).min(max_height);
+
+    let left = work_origin.0.saturating_add(margin as i32);
+    let top = work_origin.1.saturating_add(margin as i32);
+    let right = work_origin
+        .0
+        .saturating_add(work_size.0 as i32)
+        .saturating_sub(margin as i32)
+        .saturating_sub(width as i32);
+    let bottom = work_origin
+        .1
+        .saturating_add(work_size.1 as i32)
+        .saturating_sub(margin as i32)
+        .saturating_sub(height as i32);
+
+    Some(MainWindowRect {
+        x: current_pos.0.clamp(left, right.max(left)),
+        y: current_pos.1.clamp(top, bottom.max(top)),
+        width,
+        height,
+    })
+}
+
+fn fit_main_window_to_work_area(window: &tauri::WebviewWindow) -> Result<(), String> {
+    let monitor = match window.current_monitor().map_err(|e| e.to_string())? {
+        Some(monitor) => monitor,
+        None => window
+            .primary_monitor()
+            .map_err(|e| e.to_string())?
+            .ok_or("No monitor available for main window")?,
     };
-
-    match load_accounts()
-        .map_err(|error| error.to_string())
-        .and_then(|store| {
-            let settings = load_app_settings().unwrap_or_default();
-            let title = active_tray_title(
-                store.active_account_id.as_deref(),
-                settings.tray_display_mode,
-            );
-            let menu = build_menu(app, &store).map_err(|error| error.to_string())?;
-            Ok((menu, title, settings.tray_display_mode))
-        }) {
-        Ok((menu, title, mode)) => {
-            if let Err(error) = tray.set_menu(Some(menu)) {
-                eprintln!("Failed to refresh tray menu: {error}");
-            }
-            refresh_tray_display(&tray, mode, title.as_deref());
-        }
-        Err(error) => eprintln!("Failed to build tray menu: {error}"),
-    }
-}
-
-fn refresh_tray_display<R: Runtime>(
-    tray: &tauri::tray::TrayIcon<R>,
-    mode: TrayDisplayMode,
-    title: Option<&str>,
-) {
-    match mode {
-        TrayDisplayMode::IconAndSession => {
-            if let Err(error) = tray.set_visible(true) {
-                eprintln!("Failed to show tray icon: {error}");
-            }
-            #[cfg(target_os = "macos")]
-            {
-                if let Err(error) = tray.set_icon(Some(TRAY_ICON)) {
-                    eprintln!("Failed to refresh tray icon: {error}");
-                }
-                if let Err(error) = tray.set_icon_as_template(true) {
-                    eprintln!("Failed to refresh tray icon template mode: {error}");
-                }
-            }
-            #[cfg(target_os = "windows")]
-            if let Err(error) = tray.set_icon(Some(tray_icon_for_theme(current_system_theme()))) {
-                eprintln!("Failed to refresh tray icon: {error}");
-            }
-            if let Err(error) = tray.set_title(title) {
-                eprintln!("Failed to refresh tray title: {error}");
-            }
-        }
-        TrayDisplayMode::ActiveUsageText => {
-            if let Err(error) = tray.set_visible(true) {
-                eprintln!("Failed to show tray icon: {error}");
-            }
-            #[cfg(target_os = "macos")]
-            if let Err(error) = tray.set_icon(None) {
-                eprintln!("Failed to hide tray icon: {error}");
-            }
-            #[cfg(target_os = "windows")]
-            if let Err(error) = tray.set_icon(Some(tray_icon_for_theme(current_system_theme()))) {
-                eprintln!("Failed to refresh tray icon: {error}");
-            }
-            if let Err(error) = tray.set_title(title) {
-                eprintln!("Failed to refresh tray title: {error}");
-            }
-        }
-        TrayDisplayMode::Hidden => {
-            if let Err(error) = tray.set_title(None::<&str>) {
-                eprintln!("Failed to clear tray title: {error}");
-            }
-            if let Err(error) = tray.set_visible(false) {
-                eprintln!("Failed to hide tray icon: {error}");
-            }
-        }
-    }
-}
-
-fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
-    restore_main_window(app);
-}
-
-// The tray title sits after the icon, e.g. "[icon] 66%".
-fn active_session_title(active_account_id: Option<&str>) -> Option<String> {
-    let active_account_id = active_account_id?;
-    let cache = TRAY_USAGE.lock().ok()?;
-    let usage = cache.get(active_account_id)?;
-    session_remaining_title(
-        usage.primary_used_percent.or(usage.secondary_used_percent),
-        usage.error.is_some(),
+    let area = monitor.work_area();
+    let position = window.outer_position().map_err(|e| e.to_string())?;
+    let size = window.outer_size().map_err(|e| e.to_string())?;
+    let rect = main_window_rect(
+        (position.x, position.y),
+        (size.width, size.height),
+        (area.position.x, area.position.y),
+        (area.size.width, area.size.height),
+        monitor.scale_factor(),
     )
-}
+    .ok_or("Invalid main-window work area")?;
 
-fn active_tray_title(active_account_id: Option<&str>, mode: TrayDisplayMode) -> Option<String> {
-    match mode {
-        TrayDisplayMode::IconAndSession => active_session_title(active_account_id),
-        TrayDisplayMode::ActiveUsageText => Some(active_usage_title(active_account_id)),
-        TrayDisplayMode::Hidden => None,
+    if rect.width != size.width || rect.height != size.height {
+        window
+            .set_size(tauri::PhysicalSize::new(rect.width, rect.height))
+            .map_err(|e| e.to_string())?;
     }
+    if rect.x != position.x || rect.y != position.y {
+        window
+            .set_position(tauri::PhysicalPosition::new(rect.x, rect.y))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
-fn active_usage_title(active_account_id: Option<&str>) -> String {
-    let Some(active_account_id) = active_account_id else {
-        return "Codex".to_string();
-    };
-
-    let usage = TRAY_USAGE
-        .lock()
-        .ok()
-        .and_then(|cache| cache.get(active_account_id).cloned());
-
-    match usage {
-        Some(usage) if usage.error.is_none() => {
-            usage_title(
-                usage.primary_used_percent,
-                usage.primary_window_minutes,
-                usage.secondary_used_percent,
-                usage.secondary_window_minutes,
-            )
-        }
-        _ => "H:-- W:--".to_string(),
+/// 供 Tauri command 调用的入口
+pub fn show_main_window_from_cmd(app: &AppHandle) {
+    show_main_window(app);
+    // 同时隐藏 popup
+    if let Some(popup) = app.get_webview_window("tray-popup") {
+        let _ = popup.hide();
     }
 }
 
-fn usage_title(
-    primary_used_percent: Option<f64>,
-    primary_window_minutes: Option<i64>,
-    secondary_used_percent: Option<f64>,
-    secondary_window_minutes: Option<i64>,
-) -> String {
-    let mut parts = Vec::new();
-    if let Some(remaining) = remaining_percent_label(primary_used_percent) {
-        let label = window_duration_label(primary_window_minutes)
-            .unwrap_or_else(|| "H".to_string());
-        parts.push(format!("{label}:{remaining}"));
-    }
-    if let Some(remaining) = remaining_percent_label(secondary_used_percent) {
-        let label = window_duration_label(secondary_window_minutes)
-            .unwrap_or_else(|| "W".to_string());
-        parts.push(format!("{label}:{remaining}"));
-    }
-
-    if parts.is_empty() {
-        "H:-- W:--".to_string()
-    } else {
-        parts.join(" ")
-    }
-}
-
-fn window_duration_label(window_minutes: Option<i64>) -> Option<String> {
-    let minutes = window_minutes?;
-    if minutes <= 0 {
-        return None;
-    }
-    if minutes < 24 * 60 {
-        Some(format!("{}h", (minutes + 59) / 60))
-    } else {
-        Some(format!("{}d", (minutes + 24 * 60 - 1) / (24 * 60)))
-    }
-}
-
-fn session_remaining_title(used_percent: Option<f64>, has_error: bool) -> Option<String> {
-    if has_error {
-        return None;
-    }
-
-    remaining_percent_label(used_percent)
-}
-
-fn remaining_percent_label(used_percent: Option<f64>) -> Option<String> {
-    let used_percent = used_percent?;
-    if !used_percent.is_finite() {
-        return None;
-    }
-
-    Some(format!("{:.0}%", (100.0 - used_percent).clamp(0.0, 100.0)))
-}
-
-// "  —  S:73% W:51%" remaining-quota suffix for a menu label, or "" when unknown.
-fn usage_suffix(account_id: &str) -> String {
-    let Ok(cache) = TRAY_USAGE.lock() else {
-        return String::new();
-    };
-    let Some(usage) = cache.get(account_id) else {
-        return String::new();
-    };
-    if usage.error.is_some() {
-        return String::new();
-    }
-
-    let mut parts = Vec::new();
-    if let Some(remaining) = session_remaining_title(usage.primary_used_percent, false) {
-        let label = window_duration_label(usage.primary_window_minutes)
-            .unwrap_or_else(|| "S".to_string());
-        parts.push(format!("{label}:{remaining}"));
-    }
-    if let Some(used) = usage.secondary_used_percent {
-        if used.is_finite() {
-            let label = window_duration_label(usage.secondary_window_minutes)
-                .unwrap_or_else(|| "W".to_string());
-            parts.push(format!("{label}:{:.0}%", (100.0 - used).clamp(0.0, 100.0)));
-        }
-    }
-
-    if parts.is_empty() {
-        String::new()
-    } else {
-        format!("  —  {}", parts.join(" "))
-    }
-}
-
-fn account_menu_id(account_id: &str) -> String {
-    format!("{ACCOUNT_ITEM_PREFIX}{account_id}")
-}
-
-fn menu_label(label: &str) -> String {
-    label.replace('&', "&&")
-}
-
-// ============================================================================
-// Shared: react to external account changes
-// ============================================================================
-
-fn watch_accounts_file<R: Runtime>(app: AppHandle<R>) {
-    std::thread::spawn(move || {
-        let accounts_path = match get_accounts_file() {
-            Ok(path) => path,
-            Err(error) => {
-                eprintln!("Failed to resolve accounts file for tray: {error}");
-                return;
-            }
+/// 更新托盘 tooltip（不再需要完整菜单）
+///
+/// **关键**：`tray.set_tooltip` 是 Tauri/Cocoa GUI API，内部走 mpmc channel
+/// 等主线程在 NSApplication runloop 处理。如果调用时**还持有 store.lock()**，
+/// 而主线程刚好在执行 UI 的 `get_accounts`（也要拿同一把 store lock），就死锁：
+///   - tokio worker: 持 store.lock() → 调 set_tooltip → 等主线程
+///   - 主线程: 在 get_accounts → 等 store.lock()
+/// 修法：tooltip 构建放在内层 block 让 guard 在 set_tooltip 前 drop。
+pub fn update_tray_menu(app: &AppHandle) {
+    let state = app.state::<crate::AppState>();
+    let tooltip = {
+        let store = match state.store.lock() {
+            Ok(s) => s,
+            Err(_) => return,
         };
-        let mut last_modified = modified_at(&accounts_path);
-
-        loop {
-            std::thread::sleep(Duration::from_secs(1));
-            let modified = modified_at(&accounts_path);
-            if modified != last_modified {
-                last_modified = modified;
-                refresh_menu(&app); // keep the native menu current
-                let _ = app.emit(ACCOUNTS_CHANGED_EVENT, ()); // refresh the React UIs
+        if let Some(current_id) = &store.current {
+            if let Some(acc) = store.accounts.get(current_id) {
+                let quota = acc
+                    .cached_quota
+                    .as_ref()
+                    .map(|q| format!(" | 5H: {:.0}%  周: {:.0}%", q.five_hour_left, q.weekly_left))
+                    .unwrap_or_default();
+                format!("Codex Switcher - {}{}", acc.name, quota)
+            } else {
+                "Codex Switcher".to_string()
             }
+        } else {
+            "Codex Switcher - 未登录".to_string()
         }
-    });
-}
+        // store guard 在 block 结束（这一行）时 drop，set_tooltip 在外面跑
+    };
 
-fn modified_at(path: &std::path::Path) -> Option<std::time::SystemTime> {
-    path.metadata()
-        .and_then(|metadata| metadata.modified())
-        .ok()
-}
-
-/// Poll the active account's usage so the tray title stays fresh even when the
-/// main window's webview poller is hidden or suspended by the OS.
-fn poll_active_account_usage<R: Runtime>(app: AppHandle<R>) {
-    std::thread::spawn(move || loop {
-        let account = load_accounts()
-            .ok()
-            .and_then(|store| store.active_account_id)
-            .and_then(|id| get_account(&id).ok().flatten());
-
-        if let Some(account) = account {
-            match tauri::async_runtime::block_on(get_account_usage(&account)) {
-                // Keep the last known title on transient fetch errors.
-                Ok(usage) => ingest_usage(&app, vec![usage]),
-                Err(error) => eprintln!("Failed to poll usage for tray title: {error}"),
-            }
-        }
-
-        std::thread::sleep(Duration::from_secs(60));
-    });
-}
-
-/// Keep subscription dates current even when the main webview is hidden or
-/// suspended. Live metadata stays in memory and is announced to the webviews.
-fn poll_account_metadata<R: Runtime>(app: AppHandle<R>) {
-    std::thread::spawn(move || loop {
-        let accounts = load_accounts()
-            .map(|store| store.accounts)
-            .unwrap_or_default();
-
-        for account in accounts {
-            if matches!(account.auth_data, crate::types::AuthData::ApiKey { .. }) {
-                continue;
-            }
-
-            if tauri::async_runtime::block_on(crate::commands::refresh_account_metadata(account.id))
-                .is_err()
-            {
-                eprintln!(
-                    "[Account] Failed to refresh subscription metadata for: {}",
-                    account.name
-                );
-            }
-        }
-
-        let _ = app.emit(ACCOUNTS_CHANGED_EVENT, ());
-
-        std::thread::sleep(ACCOUNT_METADATA_REFRESH_INTERVAL);
-    });
+    if let Some(tray) = app.tray_by_id("main") {
+        let _ = tray.set_tooltip(Some(&tooltip));
+    }
 }
 
 #[cfg(test)]
@@ -730,141 +329,43 @@ mod tests {
     use super::*;
 
     #[test]
-    fn themed_tray_icon_preserves_shape_and_switches_to_white() {
-        let light = tray_icon_for_theme(tauri::Theme::Light);
-        let dark = tray_icon_for_theme(tauri::Theme::Dark);
-
-        assert_eq!(light.rgba(), TRAY_ICON.rgba());
-        assert_eq!(
-            dark.rgba().iter().skip(3).step_by(4).collect::<Vec<_>>(),
-            TRAY_ICON
-                .rgba()
-                .iter()
-                .skip(3)
-                .step_by(4)
-                .collect::<Vec<_>>()
-        );
-        assert!(dark
-            .rgba()
-            .chunks_exact(4)
-            .filter(|pixel| pixel[3] > 0)
-            .all(|pixel| pixel[..3] == [255, 255, 255]));
-        assert!(dark
-            .rgba()
-            .chunks_exact(4)
-            .zip(TRAY_ICON.rgba().chunks_exact(4))
-            .filter(|(_, original)| original[3] == 0)
-            .all(|(themed, original)| themed == original));
+    fn main_window_is_clamped_when_its_right_side_is_off_screen() {
+        let rect = main_window_rect((210, 20), (1500, 950), (0, 0), (1536, 1040), 1.25)
+            .expect("valid work area");
+        assert_eq!(rect.x, 21);
+        assert_eq!(rect.y, 20);
+        assert_eq!(rect.width, 1500);
+        assert_eq!(rect.height, 950);
     }
 
     #[test]
-    fn embedded_tray_icon_is_not_an_opaque_block() {
-        let alphas: Vec<_> = TRAY_ICON
-            .rgba()
-            .iter()
-            .skip(3)
-            .step_by(4)
-            .copied()
-            .collect();
-        let width = TRAY_ICON.width() as usize;
-
-        assert_eq!(
-            [
-                alphas[0],
-                alphas[width - 1],
-                alphas[alphas.len() - width],
-                alphas[alphas.len() - 1]
-            ],
-            [0, 0, 0, 0]
-        );
-        assert!(alphas.contains(&0));
-        assert!(alphas.contains(&255));
+    fn main_window_shrinks_to_small_work_area_with_dpi_margin() {
+        let rect = main_window_rect((-500, -500), (1800, 1200), (-1280, 40), (1280, 680), 1.5)
+            .expect("valid work area");
+        assert_eq!(rect.x, -1262);
+        assert_eq!(rect.y, 58);
+        assert_eq!(rect.width, 1244);
+        assert_eq!(rect.height, 644);
     }
 
     #[test]
-    fn account_ids_are_namespaced_for_tray_events() {
-        assert_eq!(account_menu_id("abc-123"), "account:abc-123");
-    }
-
-    #[test]
-    fn menu_labels_escape_mnemonic_markers() {
+    fn main_window_keeps_valid_position_and_size() {
+        let rect = main_window_rect((100, 80), (1000, 700), (0, 0), (1920, 1040), 1.0)
+            .expect("valid work area");
         assert_eq!(
-            menu_label("Research & Development"),
-            "Research && Development"
+            rect,
+            MainWindowRect {
+                x: 100,
+                y: 80,
+                width: 1000,
+                height: 700,
+            }
         );
     }
 
     #[test]
-    fn session_title_shows_remaining_percentage() {
-        assert_eq!(
-            session_remaining_title(Some(34.0), false),
-            Some("66%".to_string())
-        );
-    }
-
-    #[test]
-    fn session_title_hides_unknown_or_invalid_usage() {
-        assert_eq!(session_remaining_title(None, false), None);
-        assert_eq!(session_remaining_title(Some(f64::NAN), false), None);
-        assert_eq!(session_remaining_title(Some(34.0), true), None);
-    }
-
-    #[test]
-    fn session_title_clamps_remaining_percentage() {
-        assert_eq!(
-            session_remaining_title(Some(-5.0), false),
-            Some("100%".to_string())
-        );
-        assert_eq!(
-            session_remaining_title(Some(105.0), false),
-            Some("0%".to_string())
-        );
-    }
-
-    #[test]
-    fn usage_title_omits_missing_windows() {
-        assert_eq!(
-            usage_title(Some(27.0), Some(5 * 60), Some(82.0), Some(30 * 24 * 60)),
-            "5h:73% 30d:18%"
-        );
-        assert_eq!(
-            usage_title(None, None, Some(35.0), Some(7 * 24 * 60)),
-            "7d:65%"
-        );
-        assert_eq!(
-            usage_title(Some(27.0), Some(5 * 60), None, None),
-            "5h:73%"
-        );
-        assert_eq!(usage_title(None, None, None, None), "H:-- W:--");
-    }
-
-    #[test]
-    fn window_duration_labels_round_to_hours_and_days() {
-        assert_eq!(window_duration_label(Some(5 * 60)), Some("5h".to_string()));
-        assert_eq!(window_duration_label(Some(12 * 60)), Some("12h".to_string()));
-        assert_eq!(
-            window_duration_label(Some(7 * 24 * 60)),
-            Some("7d".to_string())
-        );
-        assert_eq!(
-            window_duration_label(Some(30 * 24 * 60)),
-            Some("30d".to_string())
-        );
-        assert_eq!(window_duration_label(Some(0)), None);
-        assert_eq!(window_duration_label(None), None);
-    }
-
-    #[test]
-    fn active_usage_title_falls_back_when_usage_is_missing() {
-        assert_eq!(active_usage_title(Some("missing")), "H:-- W:--");
-        assert_eq!(active_usage_title(None), "Codex");
-    }
-
-    #[test]
-    fn hidden_tray_mode_has_no_title() {
-        assert_eq!(
-            active_tray_title(Some("active"), TrayDisplayMode::Hidden),
-            None
-        );
+    fn main_window_rejects_invalid_monitor_metadata() {
+        assert!(main_window_rect((0, 0), (100, 100), (0, 0), (0, 100), 1.0).is_none());
+        assert!(main_window_rect((0, 0), (100, 100), (0, 0), (100, 100), f64::NAN).is_none());
     }
 }

@@ -1,0 +1,400 @@
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.modal-content {
+    width: 90%;
+    max-width: 440px;
+    max-height: 90vh;
+    background: var(--bg-secondary);
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-content.add-account-modal {
+    width: min(92vw, 760px);
+    max-width: 760px;
+}
+
+.modal-content > .modal-body {
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.modal-header {
+    padding: 0;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-primary);
+}
+
+.header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+}
+
+.header-top h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.modal-tabs {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    padding: 0 12px;
+    gap: 4px;
+}
+
+.tab-item {
+    width: 100%;
+    min-width: 0;
+    padding: 12px 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+@media (max-width: 620px) {
+    .modal-tabs {
+        display: flex;
+        overflow-x: auto;
+        scrollbar-width: thin;
+    }
+
+    .tab-item {
+        flex: 0 0 auto;
+        width: auto;
+        min-width: 112px;
+    }
+}
+
+.tab-item:hover {
+    color: var(--text-primary);
+}
+
+.tab-item.active {
+    color: var(--primary-color);
+}
+
+.tab-item.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 20%;
+    right: 20%;
+    height: 3px;
+    background: var(--primary-color);
+    border-radius: 3px 3px 0 0;
+}
+
+.modal-body {
+    padding: 24px;
+}
+
+/* 弹窗底部按钮栏（cookieEditor / 邀请 / 主动重置等共用）。
+   居中排列 + 内边距 + 顶部分隔线；AddAccountModal 那种内嵌 footer 用 inline
+   style 覆盖 padding/border 即可，这里不设背景以免给它们多一条灰条。 */
+.modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-color);
+}
+
+.modal-tip {
+    margin-bottom: 20px;
+    padding: 12px;
+    background: rgba(59, 130, 246, 0.08);
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--primary-color);
+}
+
+.oauth-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 8px 0;
+}
+
+.oauth-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    filter: drop-shadow(0 4px 12px rgba(59, 130, 246, 0.3));
+}
+
+.oauth-desc {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-muted);
+    margin-bottom: 24px;
+    max-width: 320px;
+}
+
+.oauth-status {
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    margin-top: 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--primary-color);
+    padding: 8px 16px;
+    background: rgba(59, 130, 246, 0.08);
+    border-radius: 20px;
+}
+
+.oauth-link-panel {
+    width: 100%;
+    min-width: 0;
+    margin-top: 12px;
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+
+.oauth-link-value {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin: 6px 0;
+    padding: 10px;
+    font-family: monospace;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    resize: vertical;
+    user-select: text;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 12px 14px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    outline: none;
+}
+
+.btn-full {
+    width: 100%;
+    justify-content: center;
+}
+
+.error-message {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: rgba(239, 68, 68, 0.08);
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--danger-color);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.close-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+    line-height: 1;
+}
+
+.close-btn:hover:not(:disabled) {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border-color: var(--text-muted);
+    transform: rotate(90deg);
+}
+
+.close-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.modal-content.modal-wide {
+    max-width: 760px;
+}
+
+/* 批量导入 tab */
+.bulk-panel {
+    padding: 4px 0;
+}
+
+.bulk-stat {
+    background: #232323;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #ccc;
+}
+.bulk-stat.ok    { color: #10b981; border: 1px solid #1e4a3c; }
+.bulk-stat.skip  { color: #f59e0b; border: 1px solid #4a3a1e; }
+.bulk-stat.fail  { color: #ef4444; border: 1px solid #4a1e1e; }
+
+.bulk-summary-item {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    padding: 6px 10px;
+    background: #1d1d1d;
+    border-radius: 4px;
+    margin-bottom: 6px;
+    font-size: 12.5px;
+    color: #ccc;
+}
+
+.bulk-summary-item .format-tag {
+    background: #2c2c2c;
+    color: #aaa;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11.5px;
+    min-width: 110px;
+    text-align: center;
+}
+
+.bulk-fatal {
+    color: #f88;
+    font-size: 12px;
+    padding: 4px 10px;
+}
+
+.bulk-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-top: 8px;
+}
+
+.bulk-table th {
+    text-align: left;
+    color: #888;
+    font-weight: 500;
+    padding: 6px 8px;
+    border-bottom: 1px solid #2c2c2c;
+}
+
+.bulk-table td {
+    padding: 5px 8px;
+    border-bottom: 1px solid #232323;
+    color: #cfcfcf;
+}
+
+.bulk-table .needs-refresh {
+    color: #f59e0b;
+    font-size: 11.5px;
+}
+
+/* ============================================================
+   中转站添加面板：双列 grid 让弹窗变宽不变高
+   ============================================================ */
+.relay-panel .relay-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 16px;
+}
+
+.relay-panel .relay-form-grid .form-group {
+    margin-bottom: 0; /* gap 已经替代了 */
+}
+
+.relay-panel .relay-form-grid .form-group label {
+    margin-bottom: 4px;
+    font-size: 12px;
+}
+
+.relay-panel .relay-form-grid .form-group input,
+.relay-panel .relay-form-grid .form-group select,
+.relay-panel .relay-form-grid .form-group textarea {
+    padding: 8px 12px;
+    font-size: 13px;
+    border-radius: 8px;
+}
+
+.relay-panel .relay-form-grid .form-group-full {
+    grid-column: 1 / -1;
+}

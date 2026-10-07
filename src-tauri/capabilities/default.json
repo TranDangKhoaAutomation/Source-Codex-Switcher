@@ -1,20 +1,23 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main and tray windows",
+  "description": "Capability for the main window",
   "windows": [
-    "main",
-    "tray"
+    "main"
   ],
   "permissions": [
     "core:default",
-    "core:window:default",
-    "core:window:allow-close",
-    "core:window:allow-minimize",
-    "core:window:allow-start-dragging",
-    "core:window:allow-toggle-maximize",
     "opener:default",
     "dialog:default",
-    "process:default"
+    "fs:default",
+    "fs:allow-write-text-file",
+    "fs:allow-read-text-file",
+    "fs:allow-read-file",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        "$HOME/**"
+      ]
+    }
   ]
 }

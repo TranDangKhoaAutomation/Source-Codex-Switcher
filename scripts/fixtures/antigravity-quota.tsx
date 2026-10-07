@@ -1,0 +1,51 @@
+// Dev-only visual regression fixture: no Tauri bridge, real accounts, or network calls.
+import React, { useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { AntigravityQuota, type AntigravityModelQuota } from '../../src/components/AntigravityQuota';
+import '../../src/App.css';
+import '../../src/components/AccountList.css';
+
+const reset = new Date(Date.now() + 4 * 3600_000).toISOString();
+const weeklyReset = new Date(Date.now() + 6 * 24 * 3600_000).toISOString();
+const quotas: Record<string, AntigravityModelQuota> = {
+    'gemini-3.7-flash-high': { remaining_fraction: 0.74, reset_time: reset, five_hour: {remaining_fraction: 1, reset_time: reset}, weekly: {remaining_fraction: 0.74, reset_time: weeklyReset} },
+    'gemini-3.6-flash-high': { remaining_fraction: 0.99, reset_time: reset },
+    'gemini-pro-agent': { remaining_fraction: 0.99, reset_time: reset },
+    'gemini-3.1-pro-low': { remaining_fraction: 0.99, reset_time: reset },
+    'claude-sonnet-4-6': { remaining_fraction: 0, reset_time: reset, five_hour: {remaining_fraction: 1, reset_time: reset}, weekly: {remaining_fraction: 0, reset_time: weeklyReset} },
+    'claude-opus-4-6-thinking': { remaining_fraction: 0.35, reset_time: null, weekly: {remaining_fraction: 0.93, reset_time: weeklyReset} },
+    'model-with-unknown-quota': { remaining_fraction: null, reset_time: 'invalid' },
+    ...Object.fromEntries(Array.from({ length: 21 }, (_, i) => [`preview-model-${i}`, { remaining_fraction: 0.8, reset_time: reset }])),
+};
+
+function Preview() {
+    const [live, setLive] = useState(quotas);
+    const [dark, setDark] = useState(false);
+    const [width, setWidth] = useState(1200);
+    const actions = (count: number) => <div className="col-actions">{Array.from({length: count}, (_, i) => <button key={i} className="action-btn" aria-label={`操作 ${i + 1}`}>{i + 1}</button>)}</div>;
+    const status = <div className="col-time"><div className="time-item">状态：正常</div><div className="time-item">刷新：09/03 12:00</div></div>;
+    return <main data-theme={dark ? 'dark' : 'light'} style={{ padding: 24, width, maxWidth: '100%', background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+        <h2>Google 模型额度验收（模拟数据）</h2>
+        <button onClick={() => setLive({ ...live, 'new-model-after-refresh': { remaining_fraction: 0.7, reset_time: reset } })}>模拟刷新：新增模型</button>
+        <button onClick={() => setDark(value => !value)}>切换深浅色</button>
+        {[1200, 900, 680].map(size => <button key={size} onClick={() => setWidth(size)}>宽度 {size}</button>)}
+        <h3>账号 A · 完整列宽回归</h3><div className="account-list-container">
+        <div className="account-list-toolbar"><div className="search-box"><input placeholder="搜索邮箱" /></div><div className="filter-group">{['ALL','Sub','Google','PRO','PLUS','TEAM','FREE','中转','Plan','三方'].map(label => <button key={label} className="filter-btn">{label}</button>)}</div></div>
+        <div className="account-table-header"><div className="col-checkbox">□</div><div className="col-drag"/><div className="col-email">账号</div><div className="col-quota-merged">额度</div><div className="col-time">状态</div><div className="col-actions">操作</div></div>
+        <div className="account-table-body"><div className="account-row">
+            <div className="col-checkbox">□</div><div className="col-drag">⋮</div>
+            <div className="col-email"><span className="email-text">agwffgrtyrdfrebsdtgst@gmail.com</span><div className="badges" style={{ marginLeft: 8 }}><span className="badge kind-antigravity">Google</span><span className="badge google-tier google-tier-pro">PRO</span></div></div>
+            <div className="col-quota-merged google-quota-column"><AntigravityQuota quotas={live} /></div>
+            {status}{actions(3)}
+        </div></div></div>
+        <h3>账号 B</h3><div className="col-quota-merged google-quota-column"><AntigravityQuota quotas={quotas} /></div>
+        <h3>未同步账号</h3><AntigravityQuota quotas={{}} />
+        <h3>ChatGPT 账号 · 标签换行回归</h3><div className="account-list-container"><div className="account-table-body"><div className="account-row">
+            <div className="col-checkbox">□</div><div className="col-drag">⋮</div>
+            <div className="col-email"><span className="email-text">long-chatgpt-email@example.com</span><div className="badges" style={{ display: 'flex', gap: 4, marginLeft: 8 }}><span className="badge kind-chatgpt">订阅</span><span className="badge plan">Pro</span></div></div>
+            <div className="col-quota-merged">5H 100% · 7D 80%（模拟数据）</div>
+            {status}{actions(8)}
+        </div></div></div>
+    </main>;
+}
+createRoot(document.getElementById('root')!).render(<React.StrictMode><Preview /></React.StrictMode>);

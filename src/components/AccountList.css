@@ -1,0 +1,1557 @@
+.account-list-container {
+    min-width: 0;
+    max-width: 100%;
+    container-type: inline-size;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+/* 工具栏 */
+.account-list-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--section-bg);
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* 搜索框 */
+.search-box {
+    position: relative;
+    width: 160px;
+    transition: width 0.2s ease;
+}
+
+.search-box:focus-within {
+    width: 200px;
+}
+
+.search-box .search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    opacity: 0.5;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 8px 12px 8px 32px;
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--text-primary);
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.search-box input::placeholder {
+    color: var(--text-muted);
+}
+
+.search-box input:focus {
+    border-color: var(--primary-color);
+    background: var(--hover-bg);
+}
+
+/* 筛选按钮组 */
+.filter-group {
+    display: flex;
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: 2px;
+    background: var(--input-bg);
+    padding: 3px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.filter-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: inherit;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.filter-btn:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+}
+
+.filter-btn.active {
+    color: var(--primary-color);
+    background: rgba(88, 166, 255, 0.15);
+}
+
+.filter-count {
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 4px;
+    background: var(--badge-bg);
+    color: inherit;
+}
+
+.filter-btn.active .filter-count {
+    background: rgba(88, 166, 255, 0.2);
+    color: var(--primary-color);
+}
+
+.toolbar-spacer {
+    flex: 1;
+}
+
+/* 紧凑 filter 按钮（label·count 内联，省 toolbar 宽度） */
+.filter-btn-compact {
+    gap: 4px;
+    padding: 5px 8px;
+}
+
+.filter-btn-compact .filter-count {
+    padding: 1px 5px;
+    font-size: 10px;
+    line-height: 1.4;
+}
+
+/* Sub filter — ChatGPT 订阅号聚合（所有 PRO/PLUS/TEAM/FREE） */
+.filter-btn--sub {
+    color: #10a37f;
+    background: rgba(16, 163, 127, 0.12);
+    padding: 5px 10px;
+}
+.filter-btn--sub:hover {
+    color: #10a37f;
+    background: rgba(16, 163, 127, 0.20);
+}
+.filter-btn--sub.active {
+    color: #fff;
+    background: #10a37f;
+    box-shadow: 0 0 0 1px rgba(16, 163, 127, 0.5);
+}
+.filter-btn--sub .filter-count {
+    background: rgba(16, 163, 127, 0.30);
+    color: #10a37f;
+}
+.filter-btn--sub.active .filter-count {
+    background: rgba(255, 255, 255, 0.25);
+    color: #fff;
+}
+
+/* RELAY filter — emphasised because relay accounts are first-class now */
+.filter-btn--relay {
+    color: #c4b5fd;
+    background: rgba(139, 92, 246, 0.12);
+    padding: 5px 10px;
+}
+.filter-btn--relay:hover {
+    color: #c4b5fd;
+    background: rgba(139, 92, 246, 0.20);
+}
+.filter-btn--relay.active {
+    color: #fff;
+    background: #8b5cf6;
+    box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.5);
+}
+.filter-btn--relay .filter-count {
+    background: rgba(139, 92, 246, 0.30);
+    color: #c4b5fd;
+}
+.filter-btn--relay.active .filter-count {
+    background: rgba(255, 255, 255, 0.25);
+    color: #fff;
+}
+
+/* 工具栏右侧 icon-only 按钮（替代之前的"+ 添加 / 配额 / 自动重载" 文字按钮） */
+.toolbar-icon-btn {
+    width: 30px;
+    height: 30px;
+    margin-left: 6px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.toolbar-icon-btn:hover {
+    color: var(--text-primary);
+    background: var(--hover-bg);
+}
+
+.toolbar-icon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.toolbar-icon-btn.active-reload {
+    background: var(--badge-bg);
+    color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.toolbar-icon-btn-primary {
+    background: var(--primary-color);
+    color: #fff;
+    border-color: var(--primary-color);
+}
+
+.toolbar-icon-btn-primary:hover {
+    background: var(--primary-color);
+    color: #fff;
+    filter: brightness(1.1);
+}
+
+.toolbar-icon-btn-relay {
+    background: #8b5cf6;
+    color: #fff;
+    border-color: #8b5cf6;
+}
+
+.toolbar-icon-btn-relay:hover {
+    background: #7c3aed;
+    color: #fff;
+    border-color: #7c3aed;
+}
+
+.toolbar-icon-btn-accent {
+    background: var(--accent-color, #22c55e);
+    color: #fff;
+    border-color: var(--accent-color, #22c55e);
+}
+
+.toolbar-icon-btn-accent:hover {
+    color: #fff;
+    filter: brightness(1.1);
+}
+
+/* 自定义复选框 */
+.custom-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border-color);
+    border-radius: 4px;
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    position: relative;
+}
+
+.custom-checkbox:hover {
+    border-color: var(--text-muted);
+}
+
+.custom-checkbox:checked {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.custom-checkbox:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #0d1117;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+
+/* 表头 */
+.account-table-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 16px;
+    background: var(--section-bg);
+    border-bottom: 1px solid var(--border-color);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* 表格主体 */
+.account-table-body {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+}
+
+.account-row {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    transition: all 0.15s ease;
+}
+
+.account-row:hover {
+    background: var(--hover-bg);
+}
+
+.account-row.selected {
+    background: rgba(88, 166, 255, 0.08);
+}
+
+.account-row.current {
+    background: rgba(63, 185, 80, 0.08);
+}
+
+/* 列宽 */
+.col-checkbox {
+    width: 32px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.col-drag {
+    width: 24px;
+    flex-shrink: 0;
+}
+
+.drag-handle {
+    color: var(--text-muted);
+    cursor: grab;
+    font-size: 10px;
+    letter-spacing: -2px;
+}
+
+.col-email {
+    flex: 0 1 220px;
+    width: 220px;
+    min-width: var(--account-email-min, 180px);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+    padding-right: 16px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.account-row .col-email {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+.account-row .col-email > .badges {
+    margin-left: 0 !important;
+    max-width: 100%;
+}
+
+.col-email:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.email-text {
+    max-width: 100%;
+    font-size: 13px;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.agy-model-quotas { margin-top: 8px; display: grid; gap: 8px; }
+.agy-model-quota-row { display: grid; gap: 4px; min-width: 0; }
+.agy-model-quota-row > strong { color: var(--text-primary); font-size: 10px; overflow-wrap: anywhere; }
+.agy-model-quotas .quota-grid { gap: 5px 7px; }
+
+.badge {
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 4px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+
+.badge.current {
+    background: rgba(63, 185, 80, 0.2);
+    color: var(--success-color);
+}
+
+.priority-editor {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 4px 0 7px;
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.32);
+    border-radius: 5px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: none;
+}
+
+.priority-editor input {
+    width: 34px;
+    height: 16px;
+    padding: 0 2px;
+    color: var(--text-primary);
+    background: rgba(0, 0, 0, 0.18);
+    border: 0;
+    border-radius: 3px;
+    outline: none;
+    font: inherit;
+    text-align: center;
+}
+
+.priority-editor input:focus {
+    box-shadow: 0 0 0 1px #fbbf24;
+}
+
+.priority-editor.saving {
+    opacity: 0.55;
+}
+
+.badge.plan {
+    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+    color: white;
+}
+
+/* 主动重置次数 badge */
+.badge.reset-credits {
+    background: rgba(56, 189, 248, 0.18);
+    color: #7dd3fc;
+    cursor: help;
+}
+
+/* 有剩余次数时可点击发起重置 */
+.badge.reset-credits.clickable {
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.badge.reset-credits.clickable:hover {
+    background: rgba(56, 189, 248, 0.32);
+    color: #e0f2fe;
+}
+
+/* 被限流（额度桶为 0）时 🔄 变红并呼吸——提示「现在用回收最大」 */
+.badge.reset-credits.clickable.limited {
+    background: rgba(239, 68, 68, 0.22);
+    color: #fca5a5;
+    animation: reset-credit-pulse 1.4s ease-in-out infinite;
+}
+
+.badge.reset-credits.clickable.limited:hover {
+    background: rgba(239, 68, 68, 0.38);
+    color: #fee2e2;
+}
+
+@keyframes reset-credit-pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45);
+    }
+    50% {
+        box-shadow: 0 0 0 4px rgba(239, 68, 68, 0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .badge.reset-credits.clickable.limited {
+        animation: none;
+    }
+}
+
+/* 主动重置弹窗：列出所有重置次数及到期时间 */
+.reset-credit-modal {
+    max-width: 480px;
+}
+
+.reset-credit-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.reset-credit-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.reset-credit-row:last-child {
+    border-bottom: none;
+}
+
+/* 最早到期（即将被消耗）那条整行高亮 */
+.reset-credit-row:first-child {
+    background: rgba(56, 189, 248, 0.1);
+}
+
+.reset-credit-row .rc-mark {
+    width: 12px;
+    color: #38bdf8;
+    font-weight: 700;
+}
+
+.reset-credit-row .rc-expiry {
+    font-family: ui-monospace, Menlo, monospace;
+    min-width: 92px;
+    color: #e2e8f0;
+}
+
+.reset-credit-row .rc-days {
+    min-width: 52px;
+    color: #94a3b8;
+    font-size: 12px;
+}
+
+/* 到期紧迫度着色 */
+.reset-credit-row.warn .rc-days {
+    color: #fbbf24;
+}
+
+.reset-credit-row.urgent .rc-days {
+    color: #f87171;
+    font-weight: 600;
+}
+
+.reset-credit-row .rc-source {
+    flex: 1;
+    color: #cbd5e1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.reset-credit-row .rc-badge {
+    flex-shrink: 0;
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgba(56, 189, 248, 0.22);
+    color: #7dd3fc;
+}
+
+.modal-tip.err {
+    color: #f87171;
+}
+
+.badge.expired {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    cursor: help;
+}
+
+.badge.banned {
+    background: rgba(249, 115, 22, 0.2);
+    color: #f97316;
+    cursor: help;
+}
+
+.badge.logged-out {
+    background: rgba(245, 158, 11, 0.2);
+    color: #f59e0b;
+    cursor: help;
+}
+
+.badge.account-expiry.soon {
+    background: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+    cursor: pointer;
+}
+
+.badge.account-expiry.expired {
+    background: rgba(239, 68, 68, 0.18);
+    color: #f87171;
+    cursor: pointer;
+}
+
+/* 手机锚 badge：与 .current 区分开但同样醒目 */
+.badge.anchor {
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.25) 0%, rgba(99, 102, 241, 0.25) 100%);
+    color: #7dd3fc;
+    border: 1px solid rgba(56, 189, 248, 0.45);
+    cursor: help;
+}
+
+.badge.copy-success {
+    background: rgba(88, 166, 255, 0.2);
+    color: var(--primary-color);
+    animation: fadeInOut 2s ease forwards;
+}
+
+@keyframes fadeInOut {
+    0% {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    15% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    85% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+}
+
+.account-row.expired {
+    background: rgba(239, 68, 68, 0.08);
+    border-left: 3px solid #ef4444;
+}
+
+.account-row.banned {
+    background: rgba(249, 115, 22, 0.08);
+    border-left: 3px solid #f97316;
+}
+
+.account-row.logged-out {
+    background: rgba(245, 158, 11, 0.08);
+    border-left: 3px solid #f59e0b;
+}
+
+.col-quota-merged {
+    width: 380px;
+    flex: 1 1 380px;
+    min-width: 230px;
+    padding-right: 16px;
+}
+
+.quota-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+    padding: 2px 0;
+}
+
+.quota-grid.weekly-only {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.quota-grid.weekly-only .quota-mini-card {
+    border-color: color-mix(in srgb, var(--purple-color) 40%, var(--border-color));
+    background: linear-gradient(135deg,
+        color-mix(in srgb, var(--purple-color) 9%, var(--card-bg)),
+        var(--card-bg));
+}
+
+.quota-mini-card {
+    position: relative;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    border-radius: 6px;
+    overflow: hidden;
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+}
+
+.quota-mini-card.empty {
+    justify-content: center;
+    opacity: 0.5;
+}
+
+.quota-mini-bg {
+    position: absolute;
+    inset: 0;
+    left: 0;
+    height: 100%;
+    opacity: 0.15;
+    transition: width 0.5s ease;
+}
+
+.quota-mini-bg.green {
+    background: var(--success-color);
+}
+
+.quota-mini-bg.orange {
+    background: var(--text-muted);
+}
+
+.quota-mini-bg.red {
+    background: var(--danger-color);
+}
+
+.quota-mini-content {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-family: var(--font-mono, monospace);
+}
+
+.quota-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    min-width: 40px;
+}
+
+.quota-time {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.quota-time.success {
+    color: var(--success-color);
+}
+
+.quota-time.warning {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.quota-time.neutral {
+    color: var(--text-muted);
+    /* opacity removed for clarity */
+}
+
+.icon-tiny {
+    width: 10px;
+    height: 10px;
+}
+
+.quota-percent {
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 32px;
+    text-align: right;
+}
+
+.quota-percent.green {
+    color: var(--success-color);
+}
+
+.quota-percent.orange {
+    color: var(--text-primary);
+}
+
+.quota-percent.red {
+    color: var(--danger-color);
+}
+
+.quota-empty {
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+
+.col-time {
+    width: 170px;
+    flex: 0 1 170px;
+    min-width: 110px;
+    font-size: 10px;
+    color: var(--text-muted);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    justify-content: center;
+    padding: 0 8px;
+}
+
+.time-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    line-height: 1.2;
+}
+
+.time-label {
+    color: var(--text-muted);
+    font-size: 9px;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.time-val {
+    font-family: var(--font-mono, monospace);
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.time-item.refresh {
+    color: var(--success-color);
+}
+
+.time-item.refresh .time-val {
+    opacity: 0.8;
+}
+
+.account-expiry-row {
+    gap: 2px;
+}
+
+.account-expiry-value {
+    min-width: 0;
+    flex: 0 0 auto;
+    padding: 1px 2px;
+    overflow: hidden;
+    color: var(--text-secondary);
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    background: transparent;
+    border: 1px dashed transparent;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.account-expiry-value:hover {
+    color: #7dd3fc;
+    border-color: rgba(56, 189, 248, 0.45);
+    background: rgba(56, 189, 248, 0.08);
+}
+
+.account-expiry-value.unset {
+    color: var(--text-muted);
+}
+
+.account-expiry-value.soon {
+    color: #fbbf24;
+}
+
+.account-expiry-value.expired {
+    color: #f87171;
+    font-weight: 700;
+}
+
+.account-expiry-modal {
+    width: min(420px, calc(100vw - 32px));
+    padding: 0;
+    overflow: hidden;
+}
+
+.account-expiry-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 20px 22px 14px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.account-expiry-modal-header h2 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 18px;
+}
+
+.account-expiry-modal-header p {
+    margin: 5px 0 0;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.account-expiry-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 18px 22px;
+}
+
+.account-expiry-modal-body label {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.account-expiry-modal-body input[type='date'] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    color: var(--text-primary);
+    color-scheme: dark;
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    outline: none;
+}
+
+.account-expiry-modal-body input[type='date']:focus {
+    border-color: rgba(56, 189, 248, 0.7);
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+}
+
+.account-expiry-help,
+.account-expiry-error {
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.account-expiry-help {
+    color: var(--text-muted);
+}
+
+.account-expiry-error {
+    color: #f87171;
+}
+
+.account-expiry-modal-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 22px 20px;
+}
+
+.account-expiry-modal-actions-right {
+    display: flex;
+    gap: 8px;
+}
+
+.account-expiry-modal-actions .primary-btn,
+.account-expiry-modal-actions .secondary-btn {
+    padding: 8px 14px;
+    font: inherit;
+    font-size: 12px;
+    border-radius: 7px;
+    cursor: pointer;
+}
+
+.account-expiry-modal-actions .primary-btn {
+    color: #fff;
+    background: #2563eb;
+    border: 1px solid #3b82f6;
+}
+
+.account-expiry-modal-actions .secondary-btn {
+    color: var(--text-secondary);
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+}
+
+.account-expiry-modal-actions button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.col-actions {
+    width: 136px;
+    flex-shrink: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.action-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-items: center;
+    justify-content: center;
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    color: var(--text-muted);
+}
+
+@container (max-width: 900px) {
+    .account-row { --account-email-min: 160px; }
+    .account-row .quota-grid { grid-template-columns: minmax(0, 1fr); }
+    .account-row .col-quota-merged { min-width: 180px; }
+    .account-row .col-email, .account-table-header .col-email { flex: 0 0 180px; width: 180px; min-width: 180px; }
+    .account-row, .account-table-header { padding-left: 8px; padding-right: 8px; }
+}
+
+@container (max-width: 800px) {
+    .account-row { --account-email-min: 0px; flex-wrap: wrap; gap: 8px 0; }
+    .account-row .col-email { flex: 1 1 calc(100% - 56px); min-width: 0; padding-right: 0; }
+    .account-row .col-quota-merged { flex: 1 1 100%; min-width: 0; width: 100%; padding-right: 0; }
+    .account-row .col-time { flex: 1 1 110px; }
+    .account-table-header .col-quota-merged, .account-table-header .col-time, .account-table-header .col-actions { display: none; }
+    .google-quota-models { grid-template-columns: minmax(0, 1fr); }
+}
+
+.action-btn:hover:not(:disabled) {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.5);
+    color: #60a5fa;
+}
+
+.action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.action-btn.refresh:hover:not(:disabled) {
+    background: rgba(63, 185, 80, 0.15);
+    border-color: rgba(63, 185, 80, 0.5);
+    color: var(--success-color);
+}
+
+.action-btn.switch:hover:not(:disabled) {
+    background: rgba(139, 92, 246, 0.15);
+    border-color: rgba(139, 92, 246, 0.5);
+    color: #a78bfa;
+}
+
+.action-btn.delete:hover:not(:disabled) {
+    background: rgba(248, 81, 73, 0.15);
+    border-color: rgba(248, 81, 73, 0.5);
+    color: var(--danger-color);
+}
+
+.action-btn.invite:hover:not(:disabled) {
+    background: rgba(56, 189, 248, 0.15);
+    border-color: rgba(56, 189, 248, 0.5);
+    color: #7dd3fc;
+}
+
+/* 保活列里的「唤醒」小按钮 */
+.wakeup-btn {
+    align-self: flex-start;
+    padding: 2px 8px;
+    font-size: 11px;
+    line-height: 1.4;
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 6px;
+    color: #7dd3fc;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.wakeup-btn:hover:not(:disabled) {
+    background: rgba(56, 189, 248, 0.22);
+    border-color: rgba(56, 189, 248, 0.6);
+}
+
+.wakeup-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.wakeup-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 3px;
+    margin-top: 4px;
+    /* 非常用功能：默认隐藏，鼠标经过该行才淡入 */
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.window-prime-btn.active {
+    color: #86efac;
+    background: rgba(34, 197, 94, 0.14);
+    border-color: rgba(34, 197, 94, 0.45);
+}
+
+.window-prime-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.window-prime-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.025);
+    cursor: pointer;
+}
+
+.window-prime-option:hover {
+    border-color: rgba(56, 189, 248, 0.5);
+    background: rgba(56, 189, 248, 0.06);
+}
+
+.window-prime-option input {
+    width: 18px;
+    height: 18px;
+    accent-color: #38bdf8;
+}
+
+.window-prime-option span {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.window-prime-option strong {
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.window-prime-option small {
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.window-prime-status {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 9px 11px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.window-prime-status .ok {
+    color: var(--success-color, #3fb950);
+}
+
+.window-prime-status .err {
+    color: #f0883e;
+    word-break: break-word;
+}
+
+.account-row:hover .wakeup-row {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* 唤醒结果就地显示在按钮下方，绿✓回复 / 红✗原因 */
+.wakeup-result {
+    font-size: 11px;
+    line-height: 1.35;
+    max-width: 100%;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    cursor: help;
+}
+
+.wakeup-result.ok {
+    color: var(--success-color, #3fb950);
+}
+
+.wakeup-result.err {
+    color: #f0883e;
+}
+
+/* 邀请结果卡片 */
+.invite-result-list {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.invite-result-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    border: 1px solid transparent;
+}
+
+.invite-result-card.ok {
+    background: rgba(63, 185, 80, 0.1);
+    border-color: rgba(63, 185, 80, 0.3);
+}
+
+.invite-result-card.err {
+    background: rgba(240, 136, 62, 0.1);
+    border-color: rgba(240, 136, 62, 0.35);
+}
+
+.invite-result-icon {
+    flex-shrink: 0;
+    font-weight: 700;
+}
+
+.invite-result-card.ok .invite-result-icon {
+    color: var(--success-color, #3fb950);
+}
+
+.invite-result-card.err .invite-result-icon {
+    color: #f0883e;
+}
+
+.invite-result-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.invite-result-email {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.invite-result-benefit {
+    margin-top: 2px;
+    font-size: 11px;
+    opacity: 0.85;
+}
+
+.invite-result-card.ok .invite-result-benefit {
+    color: #7dd3fc;
+}
+
+.invite-result-card.err .invite-result-benefit {
+    color: #f0883e;
+}
+
+.action-btn.anchor:hover:not(:disabled) {
+    background: rgba(56, 189, 248, 0.15);
+    border-color: rgba(56, 189, 248, 0.5);
+    color: #7dd3fc;
+}
+
+/* 已开启 anchor 时常驻高亮，与"点击切换"图标按钮区分 */
+.action-btn.anchor.on {
+    background: rgba(56, 189, 248, 0.22);
+    border-color: rgba(56, 189, 248, 0.6);
+    color: #38bdf8;
+}
+
+/* 图标样式 */
+.icon {
+    width: 16px;
+    height: 16px;
+}
+
+.icon.spinning {
+    animation: spin 0.8s linear infinite;
+}
+
+
+
+/* 底部统计 */
+.account-list-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border-color);
+    font-size: 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--section-bg);
+}
+
+.selected-info {
+    color: var(--primary-color);
+    font-weight: 500;
+}
+
+/* 刷新按钮 */
+.btn-refresh {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px;
+    font-size: 12px;
+    font-family: inherit;
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 40px;
+    min-height: 40px;
+}
+
+.btn-refresh:hover:not(:disabled) {
+    background: rgba(63, 185, 80, 0.15);
+    border-color: var(--success-color);
+    color: var(--success-color);
+}
+
+.btn-refresh:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    color: var(--success-color);
+    background: rgba(63, 185, 80, 0.1);
+    border-color: var(--success-color);
+}
+
+
+
+/* 小型加载动画 */
+.spinner-tiny {
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+.refresh-icon {
+    font-size: 16px;
+    display: inline-block;
+}
+
+.refresh-icon.spinning {
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ── 中转站类型 badge & 余额展示 ── */
+.badge.kind-chatgpt {
+    background: rgba(16, 163, 127, 0.14);
+    color: #10a37f;
+}
+
+.badge.kind-openai {
+    background: rgba(59, 130, 246, 0.14);
+    color: #3b82f6;
+}
+
+.badge.kind-relay {
+    background: rgba(168, 85, 247, 0.16);
+    color: #a855f7;
+}
+
+.badge.kind-antigravity {
+    color: #0f7b5a;
+    background: rgba(52, 168, 83, 0.14);
+    border-color: rgba(52, 168, 83, 0.32);
+}
+.badge.google-tier { letter-spacing: .02em; }
+.badge.google-tier-free { background: var(--badge-bg); color: var(--text-muted); }
+.badge.google-tier-unknown { background: var(--badge-bg); color: var(--text-muted); text-transform: none; }
+.badge.google-tier-pro { background: color-mix(in srgb, var(--primary-color) 20%, transparent); color: var(--primary-color); }
+.badge.google-tier-ultra { background: color-mix(in srgb, var(--purple-color) 22%, transparent); color: var(--purple-color); }
+
+/* Coding Plan / Token Plan 类（厂商自家订阅） */
+.badge.kind-codingplan {
+    background: rgba(245, 158, 11, 0.14);
+    color: #fbbf24;
+}
+
+/* 厂商按量付费 / 三方 API */
+.badge.kind-thirdparty {
+    background: rgba(59, 130, 246, 0.14);
+    color: #60a5fa;
+}
+
+.relay-base-url {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 280px;
+}
+
+.relay-balance {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+}
+
+.relay-balance-amount {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-weight: 600;
+}
+
+.relay-balance-amount.ok {
+    color: var(--success-color, #22c55e);
+}
+
+.relay-balance-amount.bad {
+    color: #dc2626;
+    text-decoration: line-through;
+}
+
+.email-text.relay-name-link {
+    cursor: pointer;
+    text-decoration: underline dotted transparent;
+    transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.email-text.relay-name-link:hover {
+    color: var(--primary-color, #3b82f6);
+    text-decoration-color: var(--primary-color, #3b82f6);
+}
+
+
+/* === ChatGPT account-list polish v2 === */
+.account-list-container {
+  border-radius: 15px;
+  border-color: var(--border-color);
+  box-shadow: 0 7px 24px rgba(15, 23, 42, 0.055);
+}
+
+.app[data-theme='dark'] .account-list-container {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.21);
+}
+
+.account-list-toolbar {
+  gap: 9px;
+  padding: 11px 13px;
+  background: var(--card-bg);
+}
+
+.search-box {
+  width: 190px;
+}
+
+.search-box:focus-within {
+  width: 230px;
+}
+
+.search-box input {
+  min-height: 34px;
+  border-radius: 9px;
+  background: var(--input-bg);
+}
+
+.filter-group {
+  gap: 3px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--section-bg);
+}
+
+.filter-btn {
+  min-height: 28px;
+  border-radius: 7px;
+}
+
+.toolbar-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--card-bg);
+}
+
+/* Preserve semantic action colors after the compact toolbar override. */
+.toolbar-icon-btn.toolbar-icon-btn-primary {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #fff;
+}
+
+.toolbar-icon-btn.toolbar-icon-btn-relay {
+  background: #7c3aed;
+  border-color: #7c3aed;
+  color: #fff;
+}
+
+.toolbar-icon-btn.toolbar-icon-btn-accent {
+  background: var(--accent-color, #22c55e);
+  border-color: var(--accent-color, #22c55e);
+  color: #fff;
+}
+
+.toolbar-icon-btn svg {
+  opacity: 1;
+  stroke-width: 2.4;
+}
+
+.account-table-header {
+  padding: 9px 14px;
+  background: var(--section-bg);
+  letter-spacing: 0.35px;
+}
+
+.account-row {
+  min-height: 58px;
+  padding: 10px 14px;
+  border-bottom-color: color-mix(in srgb, var(--border-color) 72%, transparent);
+}
+
+.account-row:hover {
+  background: var(--hover-bg);
+}
+
+.account-row.current {
+  background: color-mix(in srgb, var(--success-color) 8%, var(--card-bg));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--success-color) 75%, transparent);
+}
+
+.account-row.logged-out {
+  opacity: 0.72;
+  background: color-mix(in srgb, var(--warning-color) 5%, var(--card-bg));
+}
+
+.quota-mini-card {
+  border-radius: 9px;
+}
+
+.account-list-footer {
+  min-height: 40px;
+  padding: 9px 14px;
+  background: var(--card-bg);
+  border-top-color: var(--border-color);
+  font-size: 11.5px;
+}

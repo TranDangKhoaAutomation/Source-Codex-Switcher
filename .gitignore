@@ -11,9 +11,14 @@ node_modules
 dist
 dist-ssr
 *.local
+work/
+Agent.md
+vi_translation_cache.json
+src-tauri/tauri.conf.before-*.json
 
 # Editor directories and files
-.vscode
+.vscode/*
+!.vscode/extensions.json
 .idea
 .DS_Store
 *.suo
@@ -21,3 +26,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Rust/Tauri
+src-tauri/target
+docs/
