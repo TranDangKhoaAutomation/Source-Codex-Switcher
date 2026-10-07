@@ -202,6 +202,29 @@ fn get_current_account_id(state: State<AppState>) -> Result<Option<String>, Stri
     Ok(store.current.clone())
 }
 
+/// Danh sách tài khoản được che tên/email trên giao diện.
+#[tauri::command]
+fn get_masked_account_ids(state: State<AppState>) -> Result<Vec<String>, String> {
+    let store = state.store.lock().map_err(|e| e.to_string())?;
+    Ok(store.masked_account_ids.clone())
+}
+
+#[tauri::command]
+fn set_masked_account_ids(
+    state: State<AppState>,
+    ids: Vec<String>,
+) -> Result<(), String> {
+    let mut store = state.store.lock().map_err(|e| e.to_string())?;
+    let mut unique = ids
+        .into_iter()
+        .filter(|id| store.accounts.contains_key(id))
+        .collect::<Vec<_>>();
+    unique.sort();
+    unique.dedup();
+    store.masked_account_ids = unique;
+    store.save()
+}
+
 /// 获取全局设置
 #[tauri::command]
 fn get_settings(state: State<AppState>) -> Result<account::AppSettings, String> {
@@ -305,6 +328,22 @@ fn update_settings(
     if settings.remote_mode == "client" {
         settings.background_refresh = false;
     }
+    settings.scheduled_warmup_times = settings
+        .scheduled_warmup_times
+        .into_iter()
+        .map(|value| value.trim().to_string())
+        .filter(|value| {
+            let mut parts = value.split(':');
+            let hour = parts.next().and_then(|part| part.parse::<u8>().ok());
+            let minute = parts.next().and_then(|part| part.parse::<u8>().ok());
+            parts.next().is_none()
+                && hour.is_some_and(|hour| hour < 24)
+                && minute.is_some_and(|minute| minute < 60)
+                && value.len() == 5
+        })
+        .collect();
+    settings.scheduled_warmup_times.sort();
+    settings.scheduled_warmup_times.dedup();
     // Keep the Windows Run entry and persisted UI state atomic: if Windows
     // rejects the change, do not claim in Settings that startup is enabled.
     startup::sync_windows_startup(settings.start_with_windows, settings.start_minimized)?;
@@ -321,6 +360,8 @@ fn update_settings(
         settings.current_antigravity_account_id =
             store.settings.current_antigravity_account_id.clone();
         settings.current_relay_accounts = store.settings.current_relay_accounts.clone();
+        settings.last_scheduled_warmup_key =
+            store.settings.last_scheduled_warmup_key.clone();
         let prev = (
             store.settings.background_refresh,
             store.settings.proxy_enabled,
@@ -335,6 +376,15 @@ fn update_settings(
 
     // 联动刷新托盘菜单文案 (同步更新“下个账号”预览)
     crate::tray::update_tray_menu(&app);
+
+    #[cfg(target_os = "macos")]
+    {
+        let policy = match settings.dock_display_mode {
+            account::DockDisplayMode::ShowInDock => tauri::ActivationPolicy::Regular,
+            account::DockDisplayMode::MenuBarOnly => tauri::ActivationPolicy::Accessory,
+        };
+        app.set_activation_policy(policy).map_err(|e| e.to_string())?;
+    }
 
     // 后台刷新生命周期
     let mut scheduler_handle = state.scheduler.lock().map_err(|e| e.to_string())?;
@@ -2420,6 +2470,49 @@ pub fn start_quota_refresh(
                     let _ = s.save();
                     println!("[WindowPrime] 已应用订阅账号自动管理默认值");
                 }
+                // Lịch warm-up chạy trong tiến trình nền, nên vẫn hoạt động khi
+                // cửa sổ chính đã đóng. Mỗi phút lịch chỉ tạo một bootstrap id
+                // và lưu watermark để khởi động lại app không gửi trùng.
+                if s.settings.scheduled_warmup_enabled
+                    && !matches!(mode.as_str(), "client" | "solo")
+                {
+                    let now = chrono::Local::now();
+                    let minute = now.format("%H:%M").to_string();
+                    let due_time = s
+                        .settings
+                        .scheduled_warmup_times
+                        .iter()
+                        .map(|value| value.trim())
+                        .filter(|value| *value <= minute.as_str())
+                        .max()
+                        .map(str::to_string);
+                    let schedule_key = due_time.as_ref().map(|due| {
+                        format!("{}T{}", now.format("%Y-%m-%d"), due)
+                    });
+                    if let Some(schedule_key) = schedule_key.filter(|key| {
+                        s.settings.last_scheduled_warmup_key.as_deref() != Some(key.as_str())
+                    }) {
+                        let mut scheduled = 0usize;
+                        for account in s.accounts.values_mut().filter(|account| {
+                            account.is_chatgpt_oauth()
+                                && !account.is_banned
+                                && !account.is_token_invalid
+                                && !account.is_logged_out
+                                && (!account.window_priming.configured
+                                    || account.window_priming.enabled())
+                        }) {
+                            account.window_priming.bootstrap_request_id =
+                                Some(uuid::Uuid::new_v4().to_string());
+                            scheduled += 1;
+                        }
+                        s.settings.last_scheduled_warmup_key = Some(schedule_key.clone());
+                        let _ = s.save();
+                        println!(
+                            "[WindowPrime] Lịch {} đã xếp warm-up cho {} tài khoản",
+                            schedule_key, scheduled
+                        );
+                    }
+                }
                 let current_priority = s
                     .current
                     .as_ref()
@@ -3653,7 +3746,7 @@ async fn send_codex_wakeup(
     id: String,
     prompt: Option<String>,
 ) -> Result<usage::WakeupResult, String> {
-    let prompt = prompt.unwrap_or_else(|| "你好".to_string());
+    let prompt = prompt.unwrap_or_else(|| "hi".to_string());
 
     let (access_token_opt, account_id, refresh_token, is_client_or_solo) = {
         let store = state.store.lock().map_err(|e| e.to_string())?;
@@ -3709,6 +3802,63 @@ async fn send_codex_wakeup(
         usage::DEFAULT_WAKEUP_MODEL,
     )
     .await
+}
+
+#[derive(Debug, serde::Serialize)]
+struct WarmupSummary {
+    total_accounts: usize,
+    warmed_accounts: usize,
+    failed_account_ids: Vec<String>,
+}
+
+/// Chạy warm-up thủ công cho mọi tài khoản ChatGPT OAuth. Chạy tuần tự để
+/// tránh tạo một đợt request đồng thời làm chậm ChatGPT/Codex.
+#[tauri::command]
+async fn warmup_all_accounts(
+    state: tauri::State<'_, AppState>,
+) -> Result<WarmupSummary, String> {
+    let ids = {
+        let store = state.store.lock().map_err(|e| e.to_string())?;
+        store
+            .accounts
+            .values()
+            .filter(|account| {
+                account.is_chatgpt_oauth()
+                    && !account.is_banned
+                    && !account.is_token_invalid
+                    && !account.is_logged_out
+            })
+            .map(|account| account.id.clone())
+            .collect::<Vec<_>>()
+    };
+    let mut failed_account_ids = Vec::new();
+    for id in &ids {
+        let result = async {
+            let (access_token, account_id) = resolve_account_access_token(
+                &state,
+                id,
+                "Tài khoản này không hỗ trợ warm-up",
+            )
+            .await?;
+            usage::send_wakeup(
+                &access_token,
+                account_id.as_deref(),
+                "hi",
+                usage::DEFAULT_WAKEUP_MODEL,
+            )
+            .await
+            .map(|_| ())
+        }
+        .await;
+        if result.is_err() {
+            failed_account_ids.push(id.clone());
+        }
+    }
+    Ok(WarmupSummary {
+        total_accounts: ids.len(),
+        warmed_accounts: ids.len().saturating_sub(failed_account_ids.len()),
+        failed_account_ids,
+    })
 }
 
 /// 取某账号的 `(access_token, account_id)`：优先用现成 access_token；缺失时按
@@ -3782,6 +3932,32 @@ async fn list_reset_credits(
         resolve_account_access_token(&state, &id, "RELAY_ACCOUNT:中转站账号没有主动重置次数")
             .await?;
     usage::list_reset_credits(&access_token, account_id.as_deref()).await
+}
+
+/// Thống kê hồ sơ gốc theo từng tài khoản: token trọn đời, chuỗi ngày dùng,
+/// hoạt động hằng ngày và các skill/plugin được gọi nhiều nhất.
+#[tauri::command]
+async fn get_account_usage_stats(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<usage::AccountUsageStats, String> {
+    {
+        let store = state.store.lock().map_err(|e| e.to_string())?;
+        let account = store
+            .accounts
+            .get(&id)
+            .ok_or_else(|| format!("Không tìm thấy tài khoản: {}", id))?;
+        if !account.is_chatgpt_oauth() {
+            return Err("Chỉ tài khoản ChatGPT OAuth mới có thống kê hồ sơ".to_string());
+        }
+    }
+    let (access_token, account_id) = resolve_account_access_token(
+        &state,
+        &id,
+        "Chỉ tài khoản ChatGPT OAuth mới có thống kê hồ sơ",
+    )
+    .await?;
+    usage::fetch_account_usage_stats(id, &access_token, account_id.as_deref()).await
 }
 
 /// 主动重置：消耗一次该账号的「主动重置次数」(rate_limit_reset_credits)，
@@ -5149,6 +5325,46 @@ fn show_main_window_cmd(app: tauri::AppHandle) {
 /// 杀死所有 codex 相关进程（排除 Codex Switcher 自身）
 #[tauri::command]
 fn kill_codex_processes() -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        let script = r#"
+$ErrorActionPreference = 'Stop'
+$selfPid = $PID
+$targets = @(Get-CimInstance Win32_Process | Where-Object {
+  $name = [string]$_.Name
+  $cmd = [string]$_.CommandLine
+  (($name -match '(?i)codex') -or ($cmd -match '(?i)(^|[\\/\s])codex(?:\.exe)?([\s\"'']|$)')) -and
+  ($name -notmatch '(?i)codex[-_ ]?switcher') -and
+  ($cmd -notmatch '(?i)codex[-_ ]?switcher') -and
+  ($_.ProcessId -ne $selfPid)
+})
+$count = 0
+foreach ($target in $targets) {
+  try { Stop-Process -Id $target.ProcessId -Force -ErrorAction Stop; $count++ } catch {}
+}
+Write-Output $count
+"#;
+        let output = Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .output()
+            .map_err(|error| format!("Không thể chạy PowerShell: {}", error))?;
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+        }
+        let count = String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .last()
+            .and_then(|value| value.trim().parse::<usize>().ok())
+            .unwrap_or(0);
+        return Ok(if count > 0 {
+            format!("Đã đóng {} tiến trình Codex", count)
+        } else {
+            "Không tìm thấy tiến trình Codex đang chạy".to_string()
+        });
+    }
+
+    #[cfg(not(windows))]
+    {
     let script = r#"
         killed=0
         for pid in $(pgrep -f codex 2>/dev/null); do
@@ -5171,9 +5387,38 @@ fn kill_codex_processes() -> Result<String, String> {
     let n: i32 = count.parse().unwrap_or(0);
 
     if n > 0 {
-        Ok(format!("已终止 {} 个 codex 进程", n))
+        Ok(format!("Đã đóng {} tiến trình Codex", n))
     } else {
-        Ok("未找到运行中的 codex 进程".to_string())
+        Ok("Không tìm thấy tiến trình Codex đang chạy".to_string())
+    }
+    }
+}
+
+/// Mở lại Codex Desktop sau khi người dùng buộc đóng để gỡ trạng thái bị chặn.
+#[tauri::command]
+fn reopen_codex_desktop() -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        Command::new("explorer.exe")
+            .arg("shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App")
+            .spawn()
+            .map_err(|error| format!("Không thể mở Codex: {}", error))?;
+        return Ok("Đã gửi lệnh mở lại Codex Desktop".to_string());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .args(["-a", "Codex"])
+            .spawn()
+            .map_err(|error| format!("Không thể mở Codex: {}", error))?;
+        return Ok("Đã gửi lệnh mở lại Codex Desktop".to_string());
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        Command::new("codex")
+            .spawn()
+            .map_err(|error| format!("Không thể mở Codex: {}", error))?;
+        Ok("Đã gửi lệnh mở lại Codex".to_string())
     }
 }
 
@@ -6162,6 +6407,21 @@ pub fn run() {
             if let Err(e) = tray::init(app.handle()) {
                 eprintln!("初始化托盘失败: {:?}", e);
             }
+            tray::update_tray_menu(app.handle());
+            #[cfg(target_os = "macos")]
+            {
+                let dock_mode = app
+                    .state::<AppState>()
+                    .store
+                    .lock()
+                    .map(|store| store.settings.dock_display_mode)
+                    .unwrap_or(account::DockDisplayMode::ShowInDock);
+                let policy = match dock_mode {
+                    account::DockDisplayMode::ShowInDock => tauri::ActivationPolicy::Regular,
+                    account::DockDisplayMode::MenuBarOnly => tauri::ActivationPolicy::Accessory,
+                };
+                let _ = app.set_activation_policy(policy);
+            }
 
             // One-time migration for installations that used the external
             // PowerShell watchdog as their Startup entry. Preserve the user's
@@ -6457,13 +6717,13 @@ pub fn run() {
             if window.label() == "main"
                 && matches!(event, tauri::WindowEvent::CloseRequested { .. })
             {
-                let close_to_tray = window
+                let (close_to_tray, dock_display_mode) = window
                     .app_handle()
                     .state::<AppState>()
                     .store
                     .lock()
-                    .map(|store| store.settings.close_to_tray)
-                    .unwrap_or(true);
+                    .map(|store| (store.settings.close_to_tray, store.settings.dock_display_mode))
+                    .unwrap_or((true, account::DockDisplayMode::ShowInDock));
                 if !close_to_tray {
                     return;
                 }
@@ -6471,10 +6731,14 @@ pub fn run() {
                 // macOS: 隐藏 Dock 图标，变成纯后台托盘应用
                 #[cfg(target_os = "macos")]
                 {
-                    let app = window.app_handle();
-                    app.set_activation_policy(tauri::ActivationPolicy::Accessory)
-                        .unwrap_or(());
+                    if dock_display_mode == account::DockDisplayMode::MenuBarOnly {
+                        let app = window.app_handle();
+                        app.set_activation_policy(tauri::ActivationPolicy::Accessory)
+                            .unwrap_or(());
+                    }
                 }
+                #[cfg(not(target_os = "macos"))]
+                let _ = dock_display_mode;
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
                 }
@@ -6483,6 +6747,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_accounts,
             get_current_account_id,
+            get_masked_account_ids,
+            set_masked_account_ids,
             import_current_account,
             switch_account,
             sync_current_auth_to_account,
@@ -6506,8 +6772,10 @@ pub fn run() {
             get_desktop_referral_tracking,
             send_desktop_referral_invite,
             send_codex_wakeup,
+            warmup_all_accounts,
             consume_reset_credit,
             list_reset_credits,
+            get_account_usage_stats,
             open_codex_terminal,
             oauth_server::start_oauth_login,
             oauth_server::submit_oauth_callback,
@@ -6526,6 +6794,7 @@ pub fn run() {
             update_settings,
             get_proxy_status,
             kill_codex_processes,
+            reopen_codex_desktop,
             set_proxy_env,
             get_token_stats,
             reset_token_stats,

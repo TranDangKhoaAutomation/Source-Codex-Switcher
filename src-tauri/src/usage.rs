@@ -170,6 +170,204 @@ fn window_label_is_weekly(label: &str) -> bool {
         || normalized.contains("7 d")
 }
 
+/// Thống kê hồ sơ do ChatGPT trả về cho từng tài khoản OAuth.
+#[derive(Debug, Clone, Serialize)]
+pub struct AccountUsageStats {
+    pub account_id: String,
+    pub available: bool,
+    pub generated_at: Option<String>,
+    pub stats_as_of: Option<String>,
+    pub summary: AccountUsageSummary,
+    pub activity: AccountUsageActivity,
+    pub daily: Vec<AccountDailyUsage>,
+    pub top_invocations: Vec<AccountTopInvocation>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct AccountUsageSummary {
+    pub lifetime_tokens: Option<i64>,
+    pub peak_daily_tokens: Option<i64>,
+    pub longest_task_seconds: Option<i64>,
+    pub current_streak_days: Option<i64>,
+    pub longest_streak_days: Option<i64>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct AccountUsageActivity {
+    pub fast_mode_percent: Option<f64>,
+    pub reasoning_effort: Option<String>,
+    pub reasoning_effort_percent: Option<f64>,
+    pub skills_explored: Option<i64>,
+    pub total_skills_used: Option<i64>,
+    pub total_threads: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AccountDailyUsage {
+    pub date: String,
+    pub tokens: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AccountTopInvocation {
+    pub kind: String,
+    pub display_name: String,
+    pub usage_count: i64,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct ProfileUsageResponse {
+    #[serde(default)]
+    stats: ProfileUsageStats,
+    #[serde(default)]
+    metadata: ProfileUsageMetadata,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct ProfileUsageStats {
+    lifetime_tokens: Option<i64>,
+    peak_daily_tokens: Option<i64>,
+    longest_running_turn_sec: Option<i64>,
+    current_streak_days: Option<i64>,
+    longest_streak_days: Option<i64>,
+    daily_usage_buckets: Option<Vec<ProfileDailyUsageBucket>>,
+    top_invocations: Option<Vec<ProfileTopInvocation>>,
+    fast_mode_usage_percentage: Option<f64>,
+    most_used_reasoning_effort: Option<String>,
+    most_used_reasoning_effort_percentage: Option<f64>,
+    unique_skills_used: Option<i64>,
+    total_skills_used: Option<i64>,
+    total_threads: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProfileDailyUsageBucket {
+    start_date: String,
+    tokens: i64,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProfileTopInvocation {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    plugin_name: Option<String>,
+    skill_name: Option<String>,
+    usage_count: Option<i64>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct ProfileUsageMetadata {
+    stats_as_of: Option<String>,
+    generated_at: Option<String>,
+    stats_error: Option<String>,
+}
+
+fn unavailable_account_stats(account_id: String, error: String) -> AccountUsageStats {
+    AccountUsageStats {
+        account_id,
+        available: false,
+        generated_at: None,
+        stats_as_of: None,
+        summary: AccountUsageSummary::default(),
+        activity: AccountUsageActivity::default(),
+        daily: Vec::new(),
+        top_invocations: Vec::new(),
+        error: Some(error),
+    }
+}
+
+/// Khôi phục endpoint thống kê hồ sơ của bản gốc. Lỗi endpoint được trả thành
+/// `available=false` để toàn bộ trang Thống kê không bị hỏng theo.
+pub async fn fetch_account_usage_stats(
+    account_id: String,
+    access_token: &str,
+    chatgpt_account_id: Option<&str>,
+) -> Result<AccountUsageStats, String> {
+    let mut request = usage_client()
+        .get("https://chatgpt.com/backend-api/wham/profiles/me")
+        .header("Authorization", format!("Bearer {}", access_token))
+        .header("User-Agent", crate::codex_ua::codex_user_agent())
+        .header("originator", crate::codex_ua::CODEX_ORIGINATOR)
+        .header("Accept", "application/json")
+        .timeout(Duration::from_secs(15));
+    if let Some(id) = chatgpt_account_id {
+        request = request.header("ChatGPT-Account-Id", id);
+    }
+
+    let response = request
+        .send()
+        .await
+        .map_err(|error| format!("Không tải được thống kê hồ sơ: {}", error))?;
+    if !response.status().is_success() {
+        return Ok(unavailable_account_stats(
+            account_id,
+            format!("Máy chủ trả về HTTP {}", response.status().as_u16()),
+        ));
+    }
+
+    let payload = response
+        .json::<ProfileUsageResponse>()
+        .await
+        .map_err(|error| format!("Dữ liệu thống kê không hợp lệ: {}", error))?;
+    if let Some(error) = payload.metadata.stats_error.clone() {
+        return Ok(unavailable_account_stats(account_id, error));
+    }
+
+    let stats = payload.stats;
+    let daily = stats
+        .daily_usage_buckets
+        .unwrap_or_default()
+        .into_iter()
+        .map(|entry| AccountDailyUsage {
+            date: entry.start_date,
+            tokens: entry.tokens,
+        })
+        .collect();
+    let top_invocations = stats
+        .top_invocations
+        .unwrap_or_default()
+        .into_iter()
+        .map(|entry| {
+            let kind = entry.kind.unwrap_or_else(|| "integration".to_string());
+            let display_name = entry
+                .plugin_name
+                .or(entry.skill_name)
+                .unwrap_or_else(|| kind.clone());
+            AccountTopInvocation {
+                kind,
+                display_name,
+                usage_count: entry.usage_count.unwrap_or_default(),
+            }
+        })
+        .collect();
+
+    Ok(AccountUsageStats {
+        account_id,
+        available: true,
+        generated_at: payload.metadata.generated_at,
+        stats_as_of: payload.metadata.stats_as_of,
+        summary: AccountUsageSummary {
+            lifetime_tokens: stats.lifetime_tokens,
+            peak_daily_tokens: stats.peak_daily_tokens,
+            longest_task_seconds: stats.longest_running_turn_sec,
+            current_streak_days: stats.current_streak_days,
+            longest_streak_days: stats.longest_streak_days,
+        },
+        activity: AccountUsageActivity {
+            fast_mode_percent: stats.fast_mode_usage_percentage,
+            reasoning_effort: stats.most_used_reasoning_effort,
+            reasoning_effort_percent: stats.most_used_reasoning_effort_percentage,
+            skills_explored: stats.unique_skills_used,
+            total_skills_used: stats.total_skills_used,
+            total_threads: stats.total_threads,
+        },
+        daily,
+        top_invocations,
+        error: None,
+    })
+}
+
 /// 用量获取器
 pub struct UsageFetcher;
 

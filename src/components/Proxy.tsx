@@ -152,6 +152,16 @@ export function Proxy() {
         }
     };
 
+    const handleReopen = async () => {
+        try {
+            const result = await invoke<string>('reopen_codex_desktop');
+            setMessage({ type: 'success', text: result });
+            setTimeout(() => setMessage(null), 3000);
+        } catch (e) {
+            setMessage({ type: 'error', text: String(e) });
+        }
+    };
+
     const isRunning = status?.is_running ?? false;
     const isEnabled = settings?.proxy_enabled ?? false;
 
@@ -499,23 +509,24 @@ export function Proxy() {
                 </div>
             </div>
 
-            {/* 进程管理 */}
+            {/* Quản lý tiến trình */}
             <div className="settings-section">
-                <h3>进程管理</h3>
+                <h3>Khôi phục Codex Desktop</h3>
                 <div className="setting-item">
                     <div className="setting-info">
-                        <span className="setting-label">终止所有 Codex 进程</span>
+                        <span className="setting-label">Đóng các tiến trình Codex bị kẹt</span>
                         <span className="setting-desc">
-                            强制终止所有运行中的 codex 进程，用于切换代理模式后重启或排错
+                            Dùng khi Codex giữ phiên/quota cũ sau khi Switcher đã đổi tài khoản. Switcher sẽ không tự đóng chính nó.
                         </span>
                     </div>
-                    <button
-                        className="action-button warning"
-                        onClick={handleKill}
-                        disabled={killing}
-                    >
-                        {killing ? '终止中...' : '终止进程'}
-                    </button>
+                    <div className="proxy-action-row">
+                        <button className="action-button warning" onClick={handleKill} disabled={killing}>
+                            {killing ? 'Đang đóng…' : 'Đóng Codex'}
+                        </button>
+                        <button className="action-button" onClick={handleReopen} disabled={killing}>
+                            Mở lại Codex
+                        </button>
+                    </div>
                 </div>
             </div>
 

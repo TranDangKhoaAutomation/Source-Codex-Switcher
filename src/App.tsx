@@ -172,9 +172,9 @@ function App() {
       const timestamp = new Date().toLocaleTimeString();
       const kind = classifyRefreshFailure(reason);
       if (kind === 'permanent') {
-        setSchedulerError(`后台保活已停用（${account_name}，需重新登录）@ ${timestamp}`);
+        setSchedulerError(`Đã dừng duy trì phiên cho ${account_name}; cần đăng nhập lại · ${timestamp}`);
       } else {
-        setSchedulerError(`后台保活临时失败（${account_name}）：${reason} @ ${timestamp}`);
+        setSchedulerError(`Tạm thời không duy trì được phiên ${account_name}: ${reason} · ${timestamp}`);
       }
     });
 
@@ -187,14 +187,14 @@ function App() {
   const [proxyNotice, setProxyNotice] = useState<string | null>(null);
   useEffect(() => {
     const unsub1 = listen<string>('proxy-account-switched', (e) => {
-      const msg = `代理已自动切号 → ${e.payload}`;
+      const msg = `Proxy đã tự chuyển tài khoản → ${e.payload}`;
       setProxyNotice(msg);
       setTimeout(() => setProxyNotice(null), 8000);
       refresh();
       checkProxyStatus();
     });
     const unsub2 = listen<string>('proxy-account-banned', (e) => {
-      const msg = `检测到封号: ${e.payload}，已自动切换`;
+      const msg = `Phát hiện tài khoản bị khóa: ${e.payload}; đã tự chuyển`;
       setProxyNotice(msg);
       setTimeout(() => setProxyNotice(null), 10000);
       refresh();
@@ -328,10 +328,10 @@ function App() {
 
       if (path) {
         await writeTextFile(path, json);
-        alert('导出成功！');
+        alert('Xuất dữ liệu thành công!');
       }
     } catch (err) {
-      alert('导出失败: ' + String(err));
+      alert('Không xuất được dữ liệu: ' + String(err));
     }
   };
 
@@ -341,7 +341,7 @@ function App() {
       <div className="app" data-palette={settings.theme_palette || 'github'} data-theme={systemTheme}>
         <div className="loading">
           <div className="spinner" />
-          <p>加载中...</p>
+          <p>Đang tải...</p>
         </div>
       </div>
     );
@@ -434,7 +434,7 @@ function App() {
             }}
             onImportDiskAccount={async (name) => {
               try {
-                await importCurrent(name, '从 IDE 自动导入');
+                await importCurrent(name, 'Tự nhập từ IDE');
                 checkSyncStatus();
               } catch (err) {
                 console.error('导入失败:', err);
@@ -499,23 +499,23 @@ function App() {
 
       <ConfirmModal
         isOpen={showConflictModal}
-        title="⚠️ 登录状态冲突警告"
+        title="⚠️ Phiên đăng nhập chưa đồng bộ"
         message={
           <>
-            <p>检测到官方 Codex 插件中存在未同步的 Token 更新。</p>
-            <p>当前的账号状态与官方文件不一致：</p>
-            <span className="confirm-account-name">{conflictAccountName || '当前账号'}</span>
+            <p>Codex đang có token mới chưa được lưu vào Switcher.</p>
+            <p>Trạng thái tài khoản khác với file đăng nhập chính thức:</p>
+            <span className="confirm-account-name">{conflictAccountName || 'Tài khoản hiện tại'}</span>
             <p style={{ marginTop: '12px' }}>
-              直接切换将<b>覆盖</b>官方插件中的当前登录状态，且无法找回这些未同步的更新。
+              Nếu tiếp tục, Switcher sẽ <b>ghi đè</b> phiên đăng nhập hiện tại của Codex và không thể khôi phục token chưa đồng bộ.
             </p>
           </>
         }
-        confirmText="确认覆盖并切换"
-        cancelText="取消"
+        confirmText="Ghi đè và chuyển"
+        cancelText="Hủy"
         onConfirm={handleConfirmSwitch}
         onCancel={handleCancelSwitch}
         isLoading={isSwitching}
-        extraActionText="以 IDE 为准 (同步状态)"
+        extraActionText="Dùng phiên của IDE"
         onExtraAction={handleFollowIdeAction}
       />
 

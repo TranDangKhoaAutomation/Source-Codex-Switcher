@@ -89,6 +89,36 @@ interface AccountTokenHistory {
     cycles_week: CycleDetail[];
 }
 
+interface ProfileAccount {
+    id: string;
+    name: string;
+    kind?: string;
+}
+
+interface AccountProfileStats {
+    account_id: string;
+    available: boolean;
+    stats_as_of: string | null;
+    summary: {
+        lifetime_tokens: number | null;
+        peak_daily_tokens: number | null;
+        longest_task_seconds: number | null;
+        current_streak_days: number | null;
+        longest_streak_days: number | null;
+    };
+    activity: {
+        fast_mode_percent: number | null;
+        reasoning_effort: string | null;
+        reasoning_effort_percent: number | null;
+        skills_explored: number | null;
+        total_skills_used: number | null;
+        total_threads: number | null;
+    };
+    daily: { date: string; tokens: number }[];
+    top_invocations: { kind: string; display_name: string; usage_count: number }[];
+    error: string | null;
+}
+
 const COLORS = ['#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#ec4899', '#14b8a6', '#f97316'];
 
 function formatTokens(n: number): string {
@@ -112,6 +142,10 @@ function formatDuration(from: string, to: string): string {
 
 type TimeRange = 'day' | 'week' | 'month';
 
+function ProfileMetric({ label, value }: { label: string; value: string }) {
+    return <div className="profile-metric"><strong>{value}</strong><span>{label}</span></div>;
+}
+
 export function Stats() {
     const [range, setRange] = useState<TimeRange>('week');
     const [tokenHistory, setTokenHistory] = useState<TokenHistoryEntry[]>([]);
@@ -122,6 +156,39 @@ export function Stats() {
     const [accountHistory, setAccountHistory] = useState<AccountTokenHistory[]>([]);
     const [expandedAccount, setExpandedAccount] = useState<string | null>(null);
     const [expandedCycle, setExpandedCycle] = useState<string | null>(null);
+    const [profileAccounts, setProfileAccounts] = useState<ProfileAccount[]>([]);
+    const [profileAccountId, setProfileAccountId] = useState('');
+    const [profileStats, setProfileStats] = useState<AccountProfileStats | null>(null);
+    const [profileLoading, setProfileLoading] = useState(false);
+
+    useEffect(() => {
+        invoke<ProfileAccount[]>('get_accounts').then(items => {
+            const supported = items.filter(item => item.kind === 'chatgpt_oauth' || item.kind === 'legacy');
+            setProfileAccounts(supported);
+            setProfileAccountId(previous => previous || supported[0]?.id || '');
+        }).catch(error => console.error('Không tải được danh sách tài khoản:', error));
+    }, []);
+
+    const fetchProfileStats = async () => {
+        if (!profileAccountId || profileLoading) return;
+        setProfileLoading(true);
+        try {
+            setProfileStats(await invoke<AccountProfileStats>('get_account_usage_stats', { id: profileAccountId }));
+        } catch (error) {
+            setProfileStats({
+                account_id: profileAccountId,
+                available: false,
+                stats_as_of: null,
+                summary: { lifetime_tokens: null, peak_daily_tokens: null, longest_task_seconds: null, current_streak_days: null, longest_streak_days: null },
+                activity: { fast_mode_percent: null, reasoning_effort: null, reasoning_effort_percent: null, skills_explored: null, total_skills_used: null, total_threads: null },
+                daily: [],
+                top_invocations: [],
+                error: String(error),
+            });
+        } finally {
+            setProfileLoading(false);
+        }
+    };
 
     const days = range === 'day' ? 1 : range === 'week' ? 7 : 30;
 
@@ -142,7 +209,7 @@ export function Stats() {
             setPlanCaps(pc);
             setAccountHistory(ah);
         } catch (e) {
-            console.error('加载统计数据失败:', e);
+            console.error('Không tải được dữ liệu thống kê:', e);
         }
     };
 
@@ -187,7 +254,7 @@ export function Stats() {
     return (
         <div className="stats-page">
             <div className="stats-header">
-                <h2>统计</h2>
+                <h2>Thống kê</h2>
                 <div className="time-range-btns">
                     {(['day', 'week', 'month'] as TimeRange[]).map(r => (
                         <button
@@ -195,29 +262,87 @@ export function Stats() {
                             className={`range-btn ${range === r ? 'active' : ''}`}
                             onClick={() => setRange(r)}
                         >
-                            {r === 'day' ? '日' : r === 'week' ? '周' : '月'}
+                            {r === 'day' ? 'Ngày' : r === 'week' ? 'Tuần' : 'Tháng'}
                         </button>
                     ))}
                 </div>
+            </div>
+
+            <div className="stats-section profile-stats-section">
+                <div className="profile-stats-toolbar">
+                    <div>
+                        <h3>Thống kê hồ sơ theo tài khoản</h3>
+                        <p>Token trọn đời, chuỗi ngày hoạt động, tác vụ dài nhất và skill/plugin dùng nhiều.</p>
+                    </div>
+                    <div className="profile-stats-actions">
+                        <select value={profileAccountId} onChange={event => setProfileAccountId(event.target.value)}>
+                            {profileAccounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}
+                        </select>
+                        <button className="range-btn active" disabled={!profileAccountId || profileLoading} onClick={fetchProfileStats}>
+                            {profileLoading ? 'Đang tải…' : 'Tải thống kê'}
+                        </button>
+                    </div>
+                </div>
+                {profileStats && !profileStats.available && (
+                    <div className="profile-stats-error">{profileStats.error || 'Máy chủ chưa cung cấp thống kê cho tài khoản này.'}</div>
+                )}
+                {profileStats?.available && (
+                    <>
+                        <div className="profile-summary-grid">
+                            <ProfileMetric label="Token trọn đời" value={formatTokens(profileStats.summary.lifetime_tokens ?? 0)} />
+                            <ProfileMetric label="Ngày dùng cao nhất" value={formatTokens(profileStats.summary.peak_daily_tokens ?? 0)} />
+                            <ProfileMetric label="Chuỗi hiện tại" value={`${profileStats.summary.current_streak_days ?? 0} ngày`} />
+                            <ProfileMetric label="Chuỗi dài nhất" value={`${profileStats.summary.longest_streak_days ?? 0} ngày`} />
+                            <ProfileMetric label="Số cuộc trò chuyện" value={String(profileStats.activity.total_threads ?? 0)} />
+                            <ProfileMetric label="Skill đã dùng" value={String(profileStats.activity.total_skills_used ?? profileStats.activity.skills_explored ?? 0)} />
+                        </div>
+                        <div className="profile-detail-grid">
+                            <div>
+                                <h4>Hoạt động gần đây</h4>
+                                {profileStats.daily.length ? (
+                                    <ResponsiveContainer width="100%" height={180}>
+                                        <BarChart data={profileStats.daily.slice(-30)}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                                            <XAxis dataKey="date" hide />
+                                            <YAxis tickFormatter={formatTokens} fontSize={10} />
+                                            <Tooltip formatter={value => [formatTokens(Number(value)), 'Token']} />
+                                            <Bar dataKey="tokens" fill="#6366f1" radius={[3, 3, 0, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                ) : <p className="log-empty">Chưa có dữ liệu theo ngày.</p>}
+                            </div>
+                            <div>
+                                <h4>Skill và plugin dùng nhiều</h4>
+                                {profileStats.top_invocations.length ? (
+                                    <ol className="profile-invocations">
+                                        {profileStats.top_invocations.slice(0, 8).map((item, index) => (
+                                            <li key={`${item.kind}-${item.display_name}-${index}`}><span>{item.display_name}</span><strong>{item.usage_count}</strong></li>
+                                        ))}
+                                    </ol>
+                                ) : <p className="log-empty">Chưa có dữ liệu tích hợp.</p>}
+                            </div>
+                        </div>
+                    </>
+                )}
             </div>
 
             {/* 摘要卡片 */}
             <div className="stats-cards">
                 <div className="stat-card purple">
                     <div className="stat-card-value">{formatTokens(tokenStats?.total_tokens ?? 0)}</div>
-                    <div className="stat-card-label">Token 总量</div>
+                    <div className="stat-card-label">Tổng token</div>
                 </div>
                 <div className="stat-card yellow">
                     <div className="stat-card-value">${(tokenStats?.total_cost_usd ?? 0).toFixed(2)}</div>
-                    <div className="stat-card-label">总费用</div>
+                    <div className="stat-card-label">Tổng chi phí</div>
                 </div>
                 <div className="stat-card green">
                     <div className="stat-card-value">{switchStats?.total_count ?? 0}</div>
-                    <div className="stat-card-label">切号次数</div>
+                    <div className="stat-card-label">Số lần chuyển</div>
                 </div>
                 <div className="stat-card blue">
                     <div className="stat-card-value">{accountCount}</div>
-                    <div className="stat-card-label">使用账号数</div>
+                    <div className="stat-card-label">Tài khoản đã dùng</div>
                 </div>
             </div>
 
@@ -226,18 +351,18 @@ export function Stats() {
                 const allPlans = Array.from(new Set(planCaps.map(p => p.plan_type))).sort();
                 return (
                     <div className="stats-section">
-                        <h3>Plan 配额上限估算（Δpct 反推，不依赖账号打满）</h3>
+                        <h3>Ước tính dung lượng Plan từ biến động phần trăm</h3>
                         <div className="cycle-summary">
                             <div className="cycle-summary-row cycle-summary-header capacity-header">
                                 <span>Plan</span>
-                                <span className="num">5h 样本</span>
-                                <span className="num">5h 中位</span>
-                                <span className="num">5h 平均</span>
+                                <span className="num">Mẫu 5h</span>
+                                <span className="num">Trung vị 5h</span>
+                                <span className="num">Trung bình 5h</span>
                                 <span className="num">5h min–max</span>
-                                <span className="num">周 样本</span>
-                                <span className="num">周 中位</span>
-                                <span className="num">周 平均</span>
-                                <span className="num">周 min–max</span>
+                                <span className="num">Mẫu tuần</span>
+                                <span className="num">Trung vị tuần</span>
+                                <span className="num">Trung bình tuần</span>
+                                <span className="num">Tuần min–max</span>
                             </div>
                             {allPlans.map(plan => {
                                 const f = planCaps.find(p => p.plan_type === plan && p.window_type === '5h');
@@ -264,9 +389,9 @@ export function Stats() {
                             })}
                         </div>
                         <div className="cycle-hint">
-                            <b>原理</b>：每次切号前后强制抓 quota 写 `~/.codex-switcher/quota-snapshots.jsonl`。同一窗口内任意两次快照的 Δused_pct 配合期间代理 tokens → 推出该 Plan 总容量（capacity = Δtokens / Δpct × 100）。<br/>
-                            <b>中位</b>是去掉异常值后最稳的估计。Δpct&lt;3% 的样本被丢弃（used_pct 是整数，量化误差会失真）。<br/>
-                            样本会随每次切号自动累积；样本数低于 ~5 时估计仍有偏差，多用几小时即可。
+                            <b>Cách tính</b>: mỗi lần chuyển tài khoản, Switcher lưu quota vào <code>~/.codex-switcher/quota-snapshots.jsonl</code>. Chênh lệch token và <code>used_pct</code> trong cùng cửa sổ được dùng để ước tính dung lượng Plan.<br/>
+                            <b>Trung vị</b> là kết quả ổn định nhất sau khi loại mẫu bất thường. Mẫu có Δpct dưới 3% bị bỏ vì sai số làm tròn quá lớn.<br/>
+                            Mẫu tự tích lũy theo thời gian; dưới khoảng 5 mẫu thì kết quả chỉ mang tính tham khảo.
                         </div>
                     </div>
                 );
@@ -275,15 +400,15 @@ export function Stats() {
             {/* 每号 Token 历史（三级下钻：号 → 周期 → session） */}
             {accountHistory.length > 0 && (
                 <div className="stats-section">
-                    <h3>每号 Token 历史（精确累加 + 估算上限）</h3>
+                    <h3>Lịch sử token theo tài khoản</h3>
                     <div className="acct-hist-table">
                         <div className="acct-hist-row acct-hist-header">
                             <span></span>
-                            <span>邮箱 / Plan</span>
-                            <span className="num">当前 5h</span>
-                            <span className="num">上次 5h</span>
-                            <span className="num">当前 周</span>
-                            <span className="num">上次 周</span>
+                            <span>Email / Plan</span>
+                            <span className="num">5h hiện tại</span>
+                            <span className="num">5h trước</span>
+                            <span className="num">Tuần hiện tại</span>
+                            <span className="num">Tuần trước</span>
                         </div>
                         {accountHistory.map(acc => {
                             const expanded = expandedAccount === acc.account_id;
@@ -298,9 +423,9 @@ export function Stats() {
                                     >
                                         <span className="acct-toggle">{expanded ? '▼' : '▶'}</span>
                                         <span className="acct-email" title={acc.email}>
-                                            {acc.is_current && <span className="quota-badge current">当前</span>}
-                                            {acc.is_banned && <span className="quota-badge banned">封</span>}
-                                            {acc.is_token_invalid && <span className="quota-badge invalid">失效</span>}
+                                            {acc.is_current && <span className="quota-badge current">Đang dùng</span>}
+                                            {acc.is_banned && <span className="quota-badge banned">Bị khóa</span>}
+                                            {acc.is_token_invalid && <span className="quota-badge invalid">Hết hiệu lực</span>}
                                             <span className={`quota-plan plan-${(acc.plan_type || 'unknown').toLowerCase()}`}>{acc.plan_type || '—'}</span>
                                             <span className="acct-email-text">{acc.email}</span>
                                         </span>
@@ -311,7 +436,7 @@ export function Stats() {
                                     </div>
                                     {expanded && (
                                         <div className="acct-hist-expand">
-                                            <div className="acct-cycle-header">5h 周期（{acc.cycles_5h.length}）</div>
+                                            <div className="acct-cycle-header">Chu kỳ 5h ({acc.cycles_5h.length})</div>
                                             <CycleHistoryTable
                                                 cycles={acc.cycles_5h}
                                                 accountId={acc.account_id}
@@ -319,7 +444,7 @@ export function Stats() {
                                                 expandedCycle={expandedCycle}
                                                 setExpandedCycle={setExpandedCycle}
                                             />
-                                            <div className="acct-cycle-header">周周期（{acc.cycles_week.length}）</div>
+                                            <div className="acct-cycle-header">Chu kỳ tuần ({acc.cycles_week.length})</div>
                                             <CycleHistoryTable
                                                 cycles={acc.cycles_week}
                                                 accountId={acc.account_id}
@@ -334,11 +459,9 @@ export function Stats() {
                         })}
                     </div>
                     <div className="cycle-hint">
-                        每格显示「<b>实测累加 / 估算上限</b>」。<br/>
-                        <b>实测累加</b> = token-history.jsonl 在该窗口内的精确求和（不平均、不打折，无论中间切号几次）。<br/>
-                        <b>估算上限</b> = `实测累加 ÷ snapshot used_pct × 100`，用快照里 used_pct 最大那个算（量化误差最小）。`?%` 标记的 used_pct 偏小，估算误差大。<br/>
-                        🔴 = 窗口内触发过限额切号 —— 此时实测累加 ≈ Plan 实际窗口配额。<br/>
-                        点开账号看历史周期，点开周期看 session 明细。
+                        Mỗi ô hiển thị <b>token thực tế / dung lượng ước tính</b>.<br/>
+                        Token thực tế được cộng chính xác trong cửa sổ, kể cả khi đã chuyển tài khoản nhiều lần. Dung lượng được ước tính từ snapshot có <code>used_pct</code> cao nhất để giảm sai số làm tròn.<br/>
+                        🔴 nghĩa là đã chạm hạn mức trong cửa sổ. Nhấn tài khoản để xem từng chu kỳ, rồi nhấn chu kỳ để xem chi tiết session.
                     </div>
                 </div>
             )}
@@ -346,7 +469,7 @@ export function Stats() {
             {/* Token 趋势图 */}
             {trendData.length > 0 && (
                 <div className="stats-section">
-                    <h3>Token 趋势</h3>
+                    <h3>Xu hướng token</h3>
                     <ResponsiveContainer width="100%" height={250}>
                         <AreaChart data={trendData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -368,7 +491,7 @@ export function Stats() {
             <div className="stats-grid">
                 {trendData.length > 0 && (
                     <div className="stats-section">
-                        <h3>费用趋势</h3>
+                        <h3>Xu hướng chi phí</h3>
                         <ResponsiveContainer width="100%" height={200}>
                             <BarChart data={trendData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -376,7 +499,7 @@ export function Stats() {
                                 <YAxis stroke="rgba(255,255,255,0.3)" fontSize={11} tickFormatter={v => `$${v}`} />
                                 <Tooltip
                                     contentStyle={{ background: '#1e1245', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
-                                    formatter={(v) => [`$${Number(v).toFixed(4)}`, '费用']}
+                                    formatter={(v) => [`$${Number(v).toFixed(4)}`, 'Chi phí']}
                                 />
                                 <Bar dataKey="cost" fill="#fbbf24" radius={[4, 4, 0, 0]} />
                             </BarChart>
@@ -386,7 +509,7 @@ export function Stats() {
 
                 {(modelData.length > 0 || reasonData.length > 0) && (
                     <div className="stats-section">
-                        <h3>{modelData.length > 0 ? '模型分布' : '切号原因'}</h3>
+                        <h3>{modelData.length > 0 ? 'Phân bố model' : 'Lý do chuyển tài khoản'}</h3>
                         <ResponsiveContainer width="100%" height={200}>
                             <PieChart>
                                 <Pie
@@ -414,16 +537,16 @@ export function Stats() {
 
             {/* 切号日志 */}
             <div className="stats-section">
-                <h3>切号日志 ({actualSwitches.length} 条)</h3>
+                <h3>Lịch sử chuyển tài khoản ({actualSwitches.length})</h3>
                 <div className="switch-log-table">
                     <div className="log-header">
-                        <span>时间</span>
-                        <span>切换路径</span>
-                        <span>原因</span>
-                        <span>使用时长</span>
+                        <span>Thời gian</span>
+                        <span>Luồng chuyển</span>
+                        <span>Lý do</span>
+                        <span>Thời lượng dùng</span>
                     </div>
                     {actualSwitches.length === 0 ? (
-                        <div className="log-empty">暂无切号记录</div>
+                        <div className="log-empty">Chưa có lần chuyển tài khoản nào.</div>
                     ) : (
                         actualSwitches.map((e, i) => (
                             <div key={i} className="log-row">
@@ -450,13 +573,13 @@ export function Stats() {
             {/* 后台任务日志 */}
             {systemLogs.length > 0 && (
                 <div className="stats-section">
-                    <h3>后台任务日志 ({systemLogs.length} 条)</h3>
+                    <h3>Nhật ký tác vụ nền ({systemLogs.length})</h3>
                     <div className="switch-log-table">
                         <div className="log-header">
-                            <span>时间</span>
-                            <span>目标账号</span>
-                            <span>任务类型</span>
-                            <span>刷新后额度</span>
+                            <span>Thời gian</span>
+                            <span>Tài khoản đích</span>
+                            <span>Loại tác vụ</span>
+                            <span>Hạn mức sau cập nhật</span>
                         </div>
                         {systemLogs.map((e, i) => (
                             <div key={`sys-${i}`} className="log-row">
@@ -466,7 +589,7 @@ export function Stats() {
                                 </span>
                                 <span className={`log-reason ${reasonClass(e.reason)}`}>{e.reason}</span>
                                 <span className="log-duration" style={{ color: 'var(--success-color, #10b981)' }}>
-                                    {e.to_quota_5h !== null ? `${e.to_quota_5h}%` : '成功'}
+                                    {e.to_quota_5h !== null ? `${e.to_quota_5h}%` : 'Thành công'}
                                 </span>
                             </div>
                         ))}
@@ -514,8 +637,8 @@ function CellPair({ cycle }: { cycle: CycleDetail | null }) {
                 {cycle.hit_limit && <span className="cell-fire">🔴</span>}
                 {formatTokens(cycle.total_tokens)}
             </span>
-            <span className="cell-est" title={pct != null ? `quota snapshot used_pct=${pct}% · 窗口 ${formatWindow(cycle.window_start, cycle.window_end)}` : `窗口 ${formatWindow(cycle.window_start, cycle.window_end)}`}>
-                {isFallback && <span className="cell-fallback-tag">最近</span>}
+            <span className="cell-est" title={pct != null ? `quota snapshot used_pct=${pct}% · cửa sổ ${formatWindow(cycle.window_start, cycle.window_end)}` : `Cửa sổ ${formatWindow(cycle.window_start, cycle.window_end)}`}>
+                {isFallback && <span className="cell-fallback-tag">Gần nhất</span>}
                 {cap != null
                     ? `~${formatTokens(cap)}${lowConfidence ? '?' : ''}`
                     : (isFallback ? <>&nbsp;</> : ' ')}
@@ -539,19 +662,19 @@ function CycleHistoryTable({
     setExpandedCycle: (k: string | null) => void;
 }) {
     if (cycles.length === 0) {
-        return <div className="acct-empty">无数据</div>;
+        return <div className="acct-empty">Không có dữ liệu</div>;
     }
     return (
         <div className="hist-cycle-table">
             <div className="hist-cycle-row hist-cycle-header">
                 <span></span>
-                <span>窗口</span>
-                <span className="num">实测累加</span>
-                <span className="num">估算上限</span>
+                <span>Cửa sổ</span>
+                <span className="num">Token thực tế</span>
+                <span className="num">Dung lượng ước tính</span>
                 <span className="num">used_pct</span>
-                <span className="num">轮数</span>
-                <span className="num">session 数</span>
-                <span>状态</span>
+                <span className="num">Số lượt</span>
+                <span className="num">Số session</span>
+                <span>Trạng thái</span>
             </div>
             {cycles.map(c => {
                 const key = `${accountId}-${windowLabel}-${c.window_end}`;
@@ -562,10 +685,10 @@ function CycleHistoryTable({
                         ? 'limit-hit'
                         : '';
                 const statusLabel = c.is_current
-                    ? '进行中'
+                    ? 'Đang diễn ra'
                     : c.hit_limit
-                        ? `🔴 ${c.last_switch_reason ?? '限额'}`
-                        : '正常';
+                        ? `🔴 ${c.last_switch_reason ?? 'Hạn mức'}`
+                        : 'Bình thường';
                 return (
                     <div key={key}>
                         <div
@@ -591,9 +714,9 @@ function CycleHistoryTable({
                             <div className="hist-session-table">
                                 <div className="hist-session-row hist-session-header">
                                     <span>Session</span>
-                                    <span className="num">轮数</span>
+                                    <span className="num">Số lượt</span>
                                     <span className="num">Token</span>
-                                    <span>首次 → 末次</span>
+                                    <span>Đầu tiên → gần nhất</span>
                                 </div>
                                 {c.sessions.map((s, idx) => (
                                     <div key={idx} className="hist-session-row">

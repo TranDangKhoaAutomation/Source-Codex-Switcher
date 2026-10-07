@@ -146,6 +146,12 @@ async fn route(
         return handle_health(&state);
     }
 
+    // Dashboard không chứa dữ liệu bí mật. Mọi request dữ liệu bên dưới vẫn
+    // phải có X-Auth-Token, được nhập trong trình duyệt và chỉ giữ theo tab.
+    if (path == "/" || path == "/dashboard") && method == Method::GET {
+        return dashboard_resp();
+    }
+
     // 其余路径统一鉴权
     if !check_auth(&state, req.headers()) {
         eprintln!("[RemoteServer] {} {} 401 from {}", method, path, peer);
@@ -237,6 +243,9 @@ async fn route(
                 }
                 (Method::POST, Some("refresh")) => {
                     return handle_refresh_account(&state, id).await;
+                }
+                (Method::POST, Some("switch")) => {
+                    return handle_switch_to_account(&state, id);
                 }
                 (Method::POST, Some("refresh-token")) => {
                     return handle_refresh_token(&state, id).await;
@@ -1231,6 +1240,51 @@ fn json_resp(status: StatusCode, value: Value) -> Response<ResponseBody> {
     }
 }
 
+fn dashboard_resp() -> Response<ResponseBody> {
+    const HTML: &str = r#"<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Codex Switcher</title><style>
+:root{font-family:Inter,system-ui,sans-serif;color:#e5e7eb;background:#0b1020}*{box-sizing:border-box}body{margin:0;padding:24px}.wrap{max-width:980px;margin:auto}header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:20px}h1{font-size:22px;margin:0}.auth{display:flex;gap:8px}.auth input{width:260px}.auth input,button{border:1px solid #334155;border-radius:9px;padding:9px 12px;background:#111827;color:#e5e7eb}button{cursor:pointer}button:hover{border-color:#6366f1}.notice{color:#94a3b8;font-size:13px;margin-bottom:12px}.grid{display:grid;gap:10px}.card{display:grid;grid-template-columns:minmax(220px,1fr) 1.4fr auto;gap:16px;align-items:center;padding:14px;border:1px solid #273449;border-radius:12px;background:#111827}.card.current{border-color:#22c55e;background:#0d211b}.name{font-weight:700;overflow:hidden;text-overflow:ellipsis}.meta{font-size:12px;color:#94a3b8;margin-top:4px}.quota{display:flex;gap:8px}.pill{padding:6px 9px;border-radius:7px;background:#1e293b;font-size:12px}.error{color:#fb7185}@media(max-width:720px){body{padding:12px}header,.auth{align-items:stretch;flex-direction:column}.auth input{width:100%}.card{grid-template-columns:1fr}.quota{flex-wrap:wrap}}
+</style></head><body><div class="wrap"><header><div><h1>⚡ Codex Switcher</h1><div class="meta">Dashboard mạng nội bộ</div></div><div class="auth"><input id="secret" type="password" placeholder="Khóa dùng chung"><button onclick="load()">Kết nối</button></div></header><div id="notice" class="notice">Nhập khóa đã đặt trong Cài đặt → Chế độ máy chủ.</div><main id="list" class="grid"></main></div><script>
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const headers=()=>({'X-Auth-Token':document.querySelector('#secret').value,'Content-Type':'application/json'});
+async function api(path,options={}){const r=await fetch(path,{...options,headers:{...headers(),...(options.headers||{})}});if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
+async function load(){const notice=document.querySelector('#notice'),list=document.querySelector('#list');notice.textContent='Đang tải…';try{const [a,c]=await Promise.all([api('/accounts'),api('/current')]);const items=a.accounts||a;list.innerHTML=items.map(x=>{const q=x.cached_quota||{};const current=x.id===c.current;return `<section class="card ${current?'current':''}"><div><div class="name">${esc(x.name)}</div><div class="meta">${esc(q.plan_type||x.kind||'')}</div></div><div class="quota"><span class="pill">5 giờ: ${Math.round(q.five_hour_left??0)}%</span><span class="pill">Tuần: ${Math.round(q.weekly_left??0)}%</span></div><button ${current?'disabled':''} onclick="switchTo('${esc(x.id)}')">${current?'Đang dùng':'Chuyển sang'}</button></section>`}).join('');notice.textContent=`${items.length} tài khoản · cập nhật trực tiếp từ máy chủ`;}catch(e){notice.innerHTML='<span class="error">Không kết nối được: '+esc(e.message)+'</span>';list.innerHTML=''}}
+async function switchTo(id){try{await api('/accounts/'+encodeURIComponent(id)+'/switch',{method:'POST'});await load()}catch(e){document.querySelector('#notice').innerHTML='<span class="error">Không chuyển được: '+esc(e.message)+'</span>'}}
+</script></body></html>"#;
+    let mut response = resp_with_body(StatusCode::OK, HTML.as_bytes().to_vec());
+    response.headers_mut().insert(
+        hyper::header::CONTENT_TYPE,
+        hyper::header::HeaderValue::from_static("text/html; charset=utf-8"),
+    );
+    response
+}
+
+fn handle_switch_to_account(state: &ApiState, id: &str) -> Response<ResponseBody> {
+    let switched_name = {
+        let mut store = match state.store.lock() {
+            Ok(store) => store,
+            Err(error) => return err_resp(error.to_string()),
+        };
+        let Some(account) = store.accounts.get(id) else {
+            return json_resp(StatusCode::NOT_FOUND, json!({"error": "account not found"}));
+        };
+        if account.is_banned || account.is_token_invalid || account.is_logged_out {
+            return json_resp(StatusCode::BAD_REQUEST, json!({"error": "account unavailable"}));
+        }
+        let name = account.name.clone();
+        let hot = crate::account::should_hot_switch(&store.settings, store.settings.proxy_enabled);
+        if let Err(error) = store.switch_to(id, hot).and_then(|_| store.save()) {
+            return json_resp(StatusCode::BAD_REQUEST, json!({"error": error}));
+        }
+        name
+    };
+    crate::proxy::invalidate_remote_token_cache();
+    let _ = state.app_handle.emit("accounts-updated", ());
+    crate::tray::update_tray_menu(&state.app_handle);
+    json_resp(StatusCode::OK, json!({"ok": true, "current": id, "name": switched_name}))
+}
+
 fn err_resp(msg: String) -> Response<ResponseBody> {
     json_resp(StatusCode::INTERNAL_SERVER_ERROR, json!({"error": msg}))
 }
@@ -1608,6 +1662,16 @@ mod google_quota_tests {
         assert_eq!(
             store.accounts[&account.id].auth_json["tokens"]["refresh_token"],
             "test-rt"
+        );
+    }
+
+    #[test]
+    fn browser_dashboard_is_served_as_html() {
+        let response = dashboard_resp();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers()[hyper::header::CONTENT_TYPE],
+            "text/html; charset=utf-8"
         );
     }
 }

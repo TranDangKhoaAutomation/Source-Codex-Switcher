@@ -9,9 +9,42 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TrayDisplayMode {
+    IconAndSession,
+    #[default]
+    ActiveUsageText,
+    Hidden,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DockDisplayMode {
+    #[default]
+    ShowInDock,
+    MenuBarOnly,
+}
+
 /// 应用全局设置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
+    /// Cách hiển thị biểu tượng/tiêu đề trong khay hệ thống.
+    #[serde(default)]
+    pub tray_display_mode: TrayDisplayMode,
+
+    /// macOS: hiển thị trên Dock hay chỉ chạy ở thanh menu.
+    #[serde(default)]
+    pub dock_display_mode: DockDisplayMode,
+
+    /// Bật warm-up theo các mốc giờ địa phương (HH:MM).
+    #[serde(default)]
+    pub scheduled_warmup_enabled: bool,
+    #[serde(default)]
+    pub scheduled_warmup_times: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_scheduled_warmup_key: Option<String>,
+
     /// Windows 登录后自动启动 Codex Switcher。
     #[serde(default = "default_false")]
     pub start_with_windows: bool,
@@ -288,6 +321,11 @@ fn default_remote_server_bind() -> String {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
+            tray_display_mode: TrayDisplayMode::default(),
+            dock_display_mode: DockDisplayMode::default(),
+            scheduled_warmup_enabled: false,
+            scheduled_warmup_times: Vec::new(),
+            last_scheduled_warmup_key: None,
             start_with_windows: false,
             start_minimized: true,
             close_to_tray: true,
@@ -836,6 +874,9 @@ pub struct AccountStore {
     /// 全局设置
     #[serde(default)]
     pub settings: AppSettings,
+    /// Danh sách tài khoản được che tên/email trên giao diện.
+    #[serde(default)]
+    pub masked_account_ids: Vec<String>,
 }
 
 #[cfg(unix)]
@@ -1061,6 +1102,11 @@ impl AccountStore {
             current,
             version,
             settings: AppSettings::default(),
+            masked_account_ids: root
+                .get("masked_account_ids")
+                .and_then(Value::as_array)
+                .map(|items| items.iter().filter_map(Value::as_str).map(str::to_string).collect())
+                .unwrap_or_default(),
         })
     }
 
@@ -2799,6 +2845,31 @@ mod tests {
         let decoded: Account = serde_json::from_value(value).unwrap();
         assert!(decoded.account_expires_at.is_none());
         assert_eq!(decoded.window_priming, WindowPrimingState::default());
+    }
+
+    #[test]
+    fn restored_settings_keep_backward_compatible_defaults() {
+        let settings: AppSettings = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(settings.tray_display_mode, TrayDisplayMode::ActiveUsageText);
+        assert_eq!(settings.dock_display_mode, DockDisplayMode::ShowInDock);
+        assert!(!settings.scheduled_warmup_enabled);
+        assert!(settings.scheduled_warmup_times.is_empty());
+    }
+
+    #[test]
+    fn masked_accounts_are_optional_and_persisted() {
+        let empty: AccountStore = serde_json::from_value(serde_json::json!({
+            "accounts": {}, "current": null, "version": 1, "settings": {}
+        }))
+        .unwrap();
+        assert!(empty.masked_account_ids.is_empty());
+
+        let restored: AccountStore = serde_json::from_value(serde_json::json!({
+            "accounts": {}, "current": null, "version": 1, "settings": {},
+            "masked_account_ids": ["account-a", "account-b"]
+        }))
+        .unwrap();
+        assert_eq!(restored.masked_account_ids, vec!["account-a", "account-b"]);
     }
 
     #[test]

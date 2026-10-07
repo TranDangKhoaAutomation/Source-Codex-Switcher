@@ -9,7 +9,7 @@ Codex Switcher là ứng dụng desktop quản lý nhiều tài khoản Codex, t
 
 Ứng dụng hỗ trợ tài khoản ChatGPT OAuth, OpenAI API Key, Relay, Coding Plan và tài khoản từ máy chủ từ xa trong cùng một giao diện.
 
-> Trạng thái hiện tại: phiên bản `0.7.19`.
+> Trạng thái hiện tại: phiên bản `0.7.20`.
 
 ## Điểm nổi bật
 
@@ -36,16 +36,19 @@ Các tính năng dưới đây vẫn còn trong phiên bản hiện tại. Một
 | Tính năng gốc | Vị trí hoặc tên hiện tại |
 | --- | --- |
 | Quản lý nhiều tài khoản | Trang `Tài khoản`, hỗ trợ OAuth, API Key, Relay và Google Antigravity |
+| Ẩn thông tin tài khoản | Nút hình con mắt trên từng tài khoản; trạng thái được lưu qua lần khởi động sau |
 | Chuyển nhanh tài khoản | Trang `Tài khoản`, `Tổng quan` và popup khay hệ thống |
 | Theo dõi quota | Quota 5 giờ, quota tuần, Spark và Luna Reserve |
-| Usage Stats | Trang `Thống kê` và `Bộ nhớ` |
+| Usage Stats | Trang `Thống kê` có token trọn đời, streak, hoạt động hằng ngày, top skill/plugin; trang `Bộ nhớ` giữ thống kê proxy cục bộ |
 | Manual Reset Credits | Huy hiệu reset credit trong từng tài khoản, có danh sách ngày hết hạn và nút sử dụng |
-| Automatic Warm-Up | Được mở rộng thành `Giữ chu kỳ quota`, tự kích hoạt cửa sổ 5 giờ hoặc 7 ngày sau reset |
-| System Tray Controls | Popup khay hệ thống và menu chuột phải |
+| Automatic Warm-Up | `Tự kích hoạt chu kỳ`, chạy ngay từng tài khoản/toàn bộ, tự chạy sau reset hoặc theo các mốc giờ đã đặt |
+| System Tray Controls | Popup khay hệ thống, menu chuột phải và ba chế độ: biểu tượng, chữ quota hoặc ẩn |
+| macOS Dock Control | Chọn hiện trên Dock hoặc chỉ chạy ở thanh menu |
 | Rate-Limit Monitoring | Theo dõi 5 giờ, tuần, Spark, Luna Reserve, thời điểm reset và ngày hết hạn gói |
 | Blocked Switch Recovery | Chuyển nóng qua proxy, làm mới WebSocket và công cụ đóng tiến trình Codex khi cần |
 | Dual Login Mode | OAuth chính thức, nhập `auth.json`, OTP, API Key và nhập hàng loạt |
 | Chạy nền | Tự khởi động cùng Windows, thu nhỏ xuống khay và tiếp tục chạy proxy |
+| Browser Dashboard | Chế độ máy chủ cung cấp `/dashboard`; dữ liệu và thao tác vẫn bắt buộc shared secret |
 
 ## Ảnh giao diện
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Zap, RefreshCw, ArrowLeftRight, Trash2, Clock, UploadCloud, Plus, Gauge, UserPlus } from 'lucide-react';
+import { Zap, RefreshCw, ArrowLeftRight, Trash2, Clock, UploadCloud, Plus, Gauge, UserPlus, Eye, EyeOff, Play } from 'lucide-react';
 import { Account, AppSettings, LunaReserveWindow, RelayUsageCache, SparkWindows, effectiveKind } from '../hooks/useAccounts';
 import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
@@ -12,9 +12,9 @@ import { quotaWindowView } from '../utils/quotaWindows';
 import { ReferralInviteModal } from './ReferralInviteModal';
 
 const KIND_BADGE: Record<ReturnType<typeof effectiveKind>, { label: string; className: string }> = {
-    chatgpt_oauth: { label: '订阅', className: 'badge kind-chatgpt' },
+    chatgpt_oauth: { label: 'Đăng ký', className: 'badge kind-chatgpt' },
     openai_key: { label: 'API', className: 'badge kind-openai' },
-    relay: { label: '中转', className: 'badge kind-relay' },
+    relay: { label: 'Relay', className: 'badge kind-relay' },
     antigravity_oauth: { label: 'Google', className: 'badge kind-antigravity' },
 };
 
@@ -25,10 +25,10 @@ function relayCategoryBadge(account: Account): { label: string; className: strin
         case 'coding_plan':
             return { label: 'Plan', className: 'badge kind-codingplan' };
         case 'third_party':
-            return { label: '三方', className: 'badge kind-thirdparty' };
+            return { label: 'Bên thứ ba', className: 'badge kind-thirdparty' };
         case 'aggregator':
         default:
-            return { label: '中转', className: 'badge kind-relay' };
+            return { label: 'Relay', className: 'badge kind-relay' };
     }
 }
 
@@ -43,7 +43,7 @@ function antigravityTier(account: Account): { label: string; className: string }
     if (tier?.includes('pro')) return { label: 'PRO', className: 'badge google-tier google-tier-pro' };
     if (tier?.includes('plus')) return { label: 'PLUS', className: 'badge google-tier google-tier-pro' };
     if (tier === 'free' || tier?.includes('starter')) return { label: 'FREE', className: 'badge google-tier google-tier-free' };
-    return { label: '套餐待同步', className: 'badge google-tier google-tier-unknown' };
+    return { label: 'Chưa nhận diện gói', className: 'badge google-tier google-tier-unknown' };
 }
 
 function antigravityQuotaUpdatedAt(account: Account): string | undefined {
@@ -58,7 +58,7 @@ import { ConfirmModal } from './ConfirmModal';
 
 /** 把 Unix 秒到期时间格式化成本地短时间，如 "07-18 00:34" */
 function fmtExpiry(ts?: number | null): string {
-    if (!ts || ts <= 0) return '未知';
+    if (!ts || ts <= 0) return 'Chưa xác định';
     return formatViShortDateTime(ts * 1000);
 }
 
@@ -307,6 +307,60 @@ export function AccountList({
     } | null>(null);
     const [savingPrime, setSavingPrime] = useState(false);
     const [primeError, setPrimeError] = useState<string | null>(null);
+    const [maskedIds, setMaskedIds] = useState<Set<string>>(new Set());
+    const [warmingIds, setWarmingIds] = useState<Set<string>>(new Set());
+    const [warmingAll, setWarmingAll] = useState(false);
+
+    useEffect(() => {
+        invoke<string[]>('get_masked_account_ids')
+            .then(ids => setMaskedIds(new Set(ids)))
+            .catch(error => console.error('Không tải được danh sách tài khoản đã ẩn:', error));
+    }, []);
+
+    const toggleMasked = async (id: string) => {
+        const next = new Set(maskedIds);
+        next.has(id) ? next.delete(id) : next.add(id);
+        setMaskedIds(next);
+        try {
+            await invoke('set_masked_account_ids', { ids: Array.from(next) });
+        } catch (error) {
+            setMaskedIds(maskedIds);
+            setPushToast({ type: 'error', text: `Không lưu được trạng thái ẩn: ${String(error)}` });
+        }
+    };
+
+    const warmupOne = async (id: string, name: string) => {
+        if (warmingIds.has(id)) return;
+        setWarmingIds(prev => new Set(prev).add(id));
+        setPrimeError(null);
+        try {
+            await invoke('send_codex_wakeup', { id, prompt: 'hi' });
+            setPushToast({ type: 'success', text: `Đã kích hoạt cửa sổ hạn mức cho ${name}` });
+            await onRefreshComplete?.();
+        } catch (error) {
+            setPrimeError(String(error));
+            setPushToast({ type: 'error', text: `Không thể kích hoạt ${name}: ${String(error)}` });
+        } finally {
+            setWarmingIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+            setTimeout(() => setPushToast(null), 5000);
+        }
+    };
+
+    const warmupAll = async () => {
+        if (warmingAll) return;
+        setWarmingAll(true);
+        try {
+            const result = await invoke<{ total_accounts: number; warmed_accounts: number; failed_account_ids: string[] }>('warmup_all_accounts');
+            const suffix = result.failed_account_ids.length ? `; lỗi ${result.failed_account_ids.length}` : '';
+            setPushToast({ type: result.failed_account_ids.length ? 'error' : 'success', text: `Đã kích hoạt ${result.warmed_accounts}/${result.total_accounts} tài khoản${suffix}` });
+            await onRefreshComplete?.();
+        } catch (error) {
+            setPushToast({ type: 'error', text: `Không thể kích hoạt tất cả: ${String(error)}` });
+        } finally {
+            setWarmingAll(false);
+            setTimeout(() => setPushToast(null), 5000);
+        }
+    };
 
     const autoReload = settings.auto_reload_ide;
     const setAutoReload = (val: boolean) => onUpdateSettings({ ...settings, auto_reload_ide: val });
@@ -321,7 +375,7 @@ export function AccountList({
                 try {
                     await invoke('remote_push_account', { id: expiryEditor.id });
                 } catch (err) {
-                    throw new Error(`本地已保存，但同步 Server 失败：${String(err)}`);
+                    throw new Error(`Đã lưu trên máy nhưng không đồng bộ được với máy chủ: ${String(err)}`);
                 }
             }
             onRefreshComplete?.();
@@ -347,7 +401,7 @@ export function AccountList({
                 try {
                     await invoke('remote_push_account', { id: primeEditor.id });
                 } catch (err) {
-                    throw new Error(`本地已保存，但同步 Server 失败：${String(err)}`);
+                    throw new Error(`Đã lưu trên máy nhưng không đồng bộ được với máy chủ: ${String(err)}`);
                 }
             }
             onRefreshComplete?.();
@@ -398,9 +452,9 @@ export function AccountList({
         setLaunchingIds(prev => new Set(prev).add(id));
         try {
             const msg = await invoke<string>('open_codex_terminal', { id });
-            setPushToast({ type: 'success', text: msg || `${name} 已打开 codex 终端` });
+            setPushToast({ type: 'success', text: msg || `Đã mở Codex cho ${name}` });
         } catch (e) {
-            setPushToast({ type: 'error', text: `${name} 启动失败：${String(e)}` });
+            setPushToast({ type: 'error', text: `Không mở được ${name}: ${String(e)}` });
         } finally {
             setLaunchingIds(prev => { const n = new Set(prev); n.delete(id); return n; });
             setTimeout(() => setPushToast(null), 4000);
@@ -498,12 +552,12 @@ export function AccountList({
                     five_hour_reset: acc.cached_quota.five_hour_reset,
                     five_hour_reset_at: acc.cached_quota.five_hour_reset_at,
                     primary_window_seconds: acc.cached_quota.primary_window_seconds,
-                    five_hour_label: acc.cached_quota.five_hour_label || '5H 限额',
+                    five_hour_label: acc.cached_quota.five_hour_label || 'Hạn mức 5 giờ',
                     weekly_left: acc.cached_quota.weekly_left,
                     weekly_reset: acc.cached_quota.weekly_reset,
                     weekly_reset_at: acc.cached_quota.weekly_reset_at,
                     secondary_window_seconds: acc.cached_quota.secondary_window_seconds,
-                    weekly_label: acc.cached_quota.weekly_label || '周限额',
+                    weekly_label: acc.cached_quota.weekly_label || 'Hạn mức tuần',
                     plan_type: acc.cached_quota.plan_type,
                     is_valid_for_cli: isValid,
                     reset_credits: acc.cached_quota.reset_credits,
@@ -651,9 +705,9 @@ export function AccountList({
         const err = account.keepalive?.last_error;
         const isPermanent = err?.toLowerCase().match(/invalidated|expired|invalid_refresh_token|invalid_grant/);
 
-        if (isPermanent) return { text: '过期', warn: true };
-        if (isCurrent) return { text: '当前账号', warn: false };
-        return { text: err ? '重试中' : '正常', warn: !!err };
+        if (isPermanent) return { text: 'Hết hiệu lực', warn: true };
+        if (isCurrent) return { text: 'Đang dùng', warn: false };
+        return { text: err ? 'Đang thử lại' : 'Bình thường', warn: !!err };
     };
 
     const handlePushToServer = async (id: string, name: string) => {
@@ -664,13 +718,13 @@ export function AccountList({
                 { id }
             );
             const actionText =
-                r.upserted === 'created' ? '新增'
-                : r.upserted === 'merged' ? '合并到同邮箱旧账号'
-                : '更新';
-            const quotaText = r.quota_refreshed ? '，已刷新额度' : '';
-            setPushToast({ type: 'success', text: `${name} 推送 Server 成功（${actionText}${quotaText}）` });
+                r.upserted === 'created' ? 'đã thêm mới'
+                : r.upserted === 'merged' ? 'đã gộp với email cũ'
+                : 'đã cập nhật';
+            const quotaText = r.quota_refreshed ? ', đã cập nhật hạn mức' : '';
+            setPushToast({ type: 'success', text: `${name}: gửi lên máy chủ thành công (${actionText}${quotaText})` });
         } catch (e) {
-            setPushToast({ type: 'error', text: `${name} 推送失败: ${e}` });
+            setPushToast({ type: 'error', text: `${name}: không gửi được lên máy chủ: ${e}` });
         } finally {
             setPushingIds(prev => { const n = new Set(prev); n.delete(id); return n; });
             setTimeout(() => setPushToast(null), 4000);
@@ -683,9 +737,9 @@ export function AccountList({
         try {
             await invoke('switch_antigravity_account', { id });
             onRefreshComplete?.();
-            setPushToast({ type: 'success', text: `Google 当前账号已切换为 ${name}` });
+            setPushToast({ type: 'success', text: `Đã chuyển tài khoản Google sang ${name}` });
         } catch (error) {
-            setPushToast({ type: 'error', text: `Google 切号失败：${String(error)}` });
+            setPushToast({ type: 'error', text: `Không chuyển được tài khoản Google: ${String(error)}` });
         } finally {
             setSwitchingIds(prev => {
                 const next = new Set(prev);
@@ -702,22 +756,22 @@ export function AccountList({
         try {
             await invoke('switch_relay_model_account',{id,model:null});
             onRefreshComplete?.();
-            setPushToast({type:'success',text:`已将 ${name} 设为其模型的当前账号（Codex / Google 不变）`});
-        }catch(error){setPushToast({type:'error',text:`模型切号失败：${String(error)}`});}
+            setPushToast({type:'success',text:`Đã chọn ${name} cho các model tương ứng (không đổi Codex/Google)`});
+        }catch(error){setPushToast({type:'error',text:`Không chuyển được model: ${String(error)}`});}
         finally{setSwitchingIds(prev=>{const next=new Set(prev);next.delete(id);return next;});setTimeout(()=>setPushToast(null),4000);}
     };
 
     // 把 Tauri/后端原始报错翻译成人能看懂的一句话。
     const humanizeRefreshError = (raw: string): string => {
         const s = raw.toLowerCase();
-        if (s.includes('account_banned')) return '账号已被封禁';
-        if (s.includes('token_invalid')) return 'Token 已失效，需要重新登录';
-        if (s.includes('account_logged_out')) return '登录已失效：refresh_token 已过期或被撤销，请重新登录';
-        if (s.includes('token_refresh_transient')) return '刷新失败：网络或服务暂时异常，未判定账号失效';
-        if (s.includes('timeout') || s.includes('timed out')) return '请求超时（OpenAI 端慢/被节流）';
-        if (s.includes('网络请求失败') || s.includes('network')) return '网络请求失败，检查代理/网络';
-        if (s.includes('刷新令牌') || s.includes('refresh')) return 'refresh_token 刷新失败';
-        if (s.includes('relay_account')) return '中转账号请用「中转余额刷新」';
+        if (s.includes('account_banned')) return 'Tài khoản đã bị khóa';
+        if (s.includes('token_invalid')) return 'Token hết hiệu lực, cần đăng nhập lại';
+        if (s.includes('account_logged_out')) return 'Phiên đã hết hiệu lực; hãy đăng nhập lại';
+        if (s.includes('token_refresh_transient')) return 'Làm mới tạm thời thất bại do mạng hoặc dịch vụ';
+        if (s.includes('timeout') || s.includes('timed out')) return 'Yêu cầu quá thời gian chờ';
+        if (s.includes('网络请求失败') || s.includes('network')) return 'Lỗi mạng; hãy kiểm tra proxy/kết nối';
+        if (s.includes('刷新令牌') || s.includes('refresh')) return 'Không làm mới được refresh_token';
+        if (s.includes('relay_account')) return 'Hãy cập nhật số dư từ mục Relay';
         if (raw.length > 160) return raw.slice(0, 160) + '…';
         return raw;
     };
@@ -767,7 +821,7 @@ export function AccountList({
             // 把错误 tip 出来，不再静默失败
             setPushToast({
                 type: 'error',
-                text: `${accName} 刷新失败：${acc && effectiveKind(acc) === 'antigravity_oauth' ? errMsg : humanizeRefreshError(errMsg)}`,
+                text: `${accName}: cập nhật thất bại — ${acc && effectiveKind(acc) === 'antigravity_oauth' ? errMsg : humanizeRefreshError(errMsg)}`,
             });
             setTimeout(() => setPushToast(null), 6000);
         } finally {
@@ -809,7 +863,7 @@ export function AccountList({
             setCookieEditor(null);
             await handleRefreshOne(id);
         } catch (e) {
-            setPushToast({ type: 'error', text: `保存 MiMo Cookie 失败: ${e}` });
+            setPushToast({ type: 'error', text: `Không lưu được MiMo Cookie: ${e}` });
             setTimeout(() => setPushToast(null), 4000);
         } finally {
             setSavingCookie(false);
@@ -839,7 +893,7 @@ export function AccountList({
             ? {
                 role: 'button',
                 tabIndex: 0,
-                title: '点击修改 MiMo 配额 Cookie',
+                title: 'Nhấn để sửa MiMo Cookie dùng đọc hạn mức',
                 onClick: openCookieEditor,
                 onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
                     if (e.key === 'Enter' || e.key === ' ') {
@@ -852,7 +906,7 @@ export function AccountList({
         if (!cache) {
             return (
                 <div className="quota-grid" {...editableProps}>
-                    <QuotaItem label="Token 配额" percentage={undefined} reset={undefined} />
+                    <QuotaItem label="Hạn mức token" percentage={undefined} reset={undefined} />
                 </div>
             );
         }
@@ -863,7 +917,7 @@ export function AccountList({
             return (
                 <div className="quota-grid" {...editableProps}>
                     <QuotaItem
-                        label="Token 配额"
+                        label="Hạn mức token"
                         percentage={cache.remaining}
                         reset={cache.next_reset_at ? '' : undefined}
                         resetAt={cache.next_reset_at ?? undefined}
@@ -878,7 +932,7 @@ export function AccountList({
                 <div className="quota-mini-card">
                     <div className={`quota-mini-bg ${tone}`} style={{ width: '100%' }} />
                     <div className="quota-mini-content">
-                        <span className="quota-label">余额</span>
+                        <span className="quota-label">Số dư</span>
                         <span className={`quota-percent ${tone}`}>
                             {cache.remaining.toFixed(2)} {unit}
                         </span>
@@ -921,7 +975,7 @@ export function AccountList({
             <div className="account-list-toolbar">
                 <div className="search-box">
                     <span className="search-icon">🔍</span>
-                    <input type="text" placeholder="搜索邮箱..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                    <input type="text" placeholder="Tìm theo email..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                 </div>
                 <div className="filter-group">
                     {(['all', 'sub', 'google', 'pro', 'plus', 'team', 'free', 'relay', 'coding_plan', 'third_party'] as const).map(t => {
@@ -947,11 +1001,19 @@ export function AccountList({
                 </div>
                 <div className="toolbar-spacer" />
                 <button
+                    className="toolbar-icon-btn"
+                    onClick={warmupAll}
+                    disabled={warmingAll}
+                    title="Kích hoạt cửa sổ hạn mức cho tất cả tài khoản đăng ký"
+                >
+                    <Play size={16} className={warmingAll ? 'spinning' : ''} />
+                </button>
+                <button
                     className={`toolbar-icon-btn ${isMacOS && autoReload ? 'active-reload' : ''}`}
                     onClick={() => setAutoReload(!autoReload)}
                     disabled={!isMacOS}
                     aria-pressed={isMacOS && autoReload}
-                    title={!isMacOS ? 'IDE 自动重载仅支持 macOS，请手动重载 IDE' : autoReload ? '关闭自动重载 IDE' : '开启自动重载 IDE'}
+                    title={!isMacOS ? 'Tự tải lại IDE chỉ hỗ trợ macOS' : autoReload ? 'Tắt tự tải lại IDE' : 'Bật tự tải lại IDE'}
                 >
                     <Zap size={16} fill={isMacOS && autoReload ? "currentColor" : "none"} />
                 </button>
@@ -959,7 +1021,7 @@ export function AccountList({
                     <button
                         className="toolbar-icon-btn toolbar-icon-btn-primary"
                         onClick={onAddAccount}
-                        title="登录账号 (OpenAI / Google / 导入)"
+                        title="Đăng nhập tài khoản OpenAI/Google hoặc nhập dữ liệu"
                     >
                         <Plus size={16} />
                     </button>
@@ -968,7 +1030,7 @@ export function AccountList({
                     <button
                         className="toolbar-icon-btn toolbar-icon-btn-relay"
                         onClick={onAddRelay}
-                        title="添加中转 (Coding Plan / 通用 Responses 中转)"
+                        title="Thêm Relay, Coding Plan hoặc Responses API"
                     >
                         <Plus size={16} />
                     </button>
@@ -978,12 +1040,12 @@ export function AccountList({
                         className="toolbar-icon-btn toolbar-icon-btn-accent"
                         onClick={onRefreshUsage}
                         disabled={usageLoading}
-                        title="刷新 Codex 当前账号额度"
+                        title="Cập nhật hạn mức tài khoản Codex đang dùng"
                     >
                         <Gauge className={usageLoading ? 'spinning' : ''} size={16} />
                     </button>
                 )}
-                <button className="btn-refresh" title="刷新当前列表额度" aria-label="刷新当前列表额度" disabled={isRefreshingAll} onClick={() => {
+                <button className="btn-refresh" title="Cập nhật hạn mức trong danh sách" aria-label="Cập nhật hạn mức trong danh sách" disabled={isRefreshingAll} onClick={() => {
                     // 之前是 Promise.all 一把梭 — N 个账号同时打 OpenAI usage，
                     // 一旦边缘节流单个账号要 10s+，整批的尾延迟会跟着慢账号走。
                     // 改成并发上限 6 的滑动窗口：快账号先回，慢账号自然排队，
@@ -1059,7 +1121,7 @@ export function AccountList({
                                     <input type="checkbox" className="custom-checkbox" checked={selectedIds.has(acc.id)} onChange={() => { const s = new Set(selectedIds); s.has(acc.id) ? s.delete(acc.id) : s.add(acc.id); setSelectedIds(s); }} />
                                 </div>
                                 <div className="col-drag"><span className="drag-handle">⋮⋮</span></div>
-                                <div className="col-email" title="点击复制账号">
+                                <div className="col-email" title="Nhấn để sao chép tên tài khoản">
                                     {(() => {
                                         const isRelay = effectiveKind(acc) === 'relay';
                                         const isMiMoRelay = [
@@ -1088,12 +1150,21 @@ export function AccountList({
                                             <span
                                                 className={isRelay ? 'email-text relay-name-link' : 'email-text'}
                                                 onClick={onNameClick}
-                                                title={isRelay && link ? `点击打开 ${link}` : undefined}
+                                                title={isRelay && link ? `Mở ${link}` : undefined}
                                             >
-                                                {acc.name}
+                                                {maskedIds.has(acc.id) ? '••••••••@••••' : acc.name}
                                             </span>
                                         );
                                     })()}
+                                    <button
+                                        type="button"
+                                        className="account-mask-btn"
+                                        onClick={event => { event.stopPropagation(); void toggleMasked(acc.id); }}
+                                        title={maskedIds.has(acc.id) ? 'Hiện tên tài khoản' : 'Ẩn tên tài khoản'}
+                                        aria-label={maskedIds.has(acc.id) ? 'Hiện tên tài khoản' : 'Ẩn tên tài khoản'}
+                                    >
+                                        {maskedIds.has(acc.id) ? <Eye size={13} /> : <EyeOff size={13} />}
+                                    </button>
                                     <div className="badges" style={{ display: 'flex', gap: '4px', marginLeft: '8px', flexWrap: 'wrap' }}>
                                         {(() => {
                                             const k = effectiveKind(acc);
@@ -1101,8 +1172,8 @@ export function AccountList({
                                             const meta = k === 'relay' ? relayCategoryBadge(acc) : KIND_BADGE[k];
                                             return <span className={meta.className}>{meta.label}</span>;
                                         })()}
-                                        {copiedId === acc.id && <span className="badge copy-success">已复制</span>}
-                                        {isCurrent && !isModelRelay && <span className="badge current">当前</span>}
+                                        {copiedId === acc.id && <span className="badge copy-success">Đã sao chép</span>}
+                                        {isCurrent && !isModelRelay && <span className="badge current">Đang dùng</span>}
                                         {kind !== 'antigravity_oauth' && (
                                             <label
                                                 className={`priority-editor ${savingPriorityIds.has(acc.id) ? 'saving' : ''}`}
@@ -1125,7 +1196,7 @@ export function AccountList({
                                             </label>
                                         )}
                                         {relayCurrent.isCurrent && <span className="badge current" title={`当前模型：${relayCurrent.active.join('、')}`}>{relayCurrent.label}</span>}
-                                        {isAntigravityCurrent && <span className="badge current">Google 当前</span>}
+                                        {isAntigravityCurrent && <span className="badge current">Google đang dùng</span>}
                                         {kind === 'antigravity_oauth' && (() => {
                                             const tier = antigravityTier(acc);
                                             return <span className={tier.className}>{tier.label}</span>;
@@ -1134,16 +1205,16 @@ export function AccountList({
                                             <span
                                                 className="badge anchor"
                                                 title="手机锚：磁盘 ~/.codex/auth.json 永远跟随此号，Codex.app 手机远程连接绑定此号；切到其他号时 disk 不动、proxy 出口照切"
-                                            >📱 手机锚</span>
+                                            >📱 Neo điện thoại</span>
                                         )}
-                                        {isBanned ? <span className="badge banned" title="该账号已被 OpenAI 封禁">封号</span> : isLoggedOut ? <span className="badge logged-out" title="登录已失效，可能是 refresh_token 过期、被撤销或会话在其他设备结束">需重新登录</span> : isInvalid && <span className="badge expired" title="该账号 Token 已过期或失效">过期</span>}
+                                        {isBanned ? <span className="badge banned" title="Tài khoản đã bị OpenAI khóa">Bị khóa</span> : isLoggedOut ? <span className="badge logged-out" title="Phiên đăng nhập đã hết hiệu lực">Cần đăng nhập lại</span> : isInvalid && <span className="badge expired" title="Token đã hết hiệu lực">Hết hiệu lực</span>}
                                         {expiry.badge && <span className={`badge account-expiry ${expiry.tone}`} title={expiry.title}>📅 {expiry.badge}</span>}
                                         {usage?.plan_type && <span className="badge plan">{usage.plan_type.toUpperCase()}</span>}
                                         {kind === 'chatgpt_oauth' && usage?.reset_credits == null && (
                                             <button type="button" className="badge reset-credits clickable"
-                                                title="上游未返回重置次数，不代表次数已清空。点击查询银行明细。"
+                                                title="Máy chủ chưa trả số lượt reset; nhấn để truy vấn chi tiết."
                                                 onClick={() => openResetModal(acc.id, acc.name, null)}>
-                                                🔄 次数未知
+                                                🔄 Chưa rõ số lượt
                                             </button>
                                         )}
                                         {usage?.reset_credits != null && (
@@ -1151,13 +1222,13 @@ export function AccountList({
                                                 <span
                                                     className={`badge reset-credits clickable${rateLimited ? ' limited' : ''}`}
                                                     title={rateLimited
-                                                        ? '⚡ 当前已被限流（额度桶为 0）——现在用一次主动重置回收最大，点击查看明细'
-                                                        : '点击查看所有主动重置次数（含各自到期时间），再消耗一次重置限额窗口'}
+                                                        ? '⚡ Đang chạm hạn mức; nhấn để xem và dùng một lượt reset'
+                                                        : 'Xem các lượt reset còn lại và thời điểm hết hạn'}
                                                     onClick={() => openResetModal(acc.id, acc.name, usage.reset_credits ?? 0)}
                                                     style={{ cursor: 'pointer' }}
                                                 >{rateLimited ? '⚡' : ''}🔄 {usage.reset_credits}</span>
                                             ) : (
-                                                <span className="badge reset-credits" title="主动重置次数（剩余 0 次，无法重置）">🔄 {usage.reset_credits}</span>
+                                                <span className="badge reset-credits" title="Không còn lượt reset chủ động">🔄 {usage.reset_credits}</span>
                                             )
                                         )}
                                     </div>
@@ -1185,7 +1256,7 @@ export function AccountList({
                                                 <QuotaItem label="HẠN MỨC" percentage={undefined} reset="API chưa trả cửa sổ hạn mức" />
                                             )}
                                         </div>
-                                    ) : <span className="quota-empty">未获取数据</span>}
+                                    ) : <span className="quota-empty">Chưa có dữ liệu</span>}
                                 </div>
                                 <div className="col-time">
                                     <div className="time-item">
@@ -1213,9 +1284,9 @@ export function AccountList({
                                                 className="wakeup-btn"
                                                 onClick={() => handleLaunchCodex(acc.id, acc.name)}
                                                 disabled={launchingIds.has(acc.id)}
-                                                title='用该账号开一个真 codex 终端（隔离 + 直连），可发一句"你好"触发 referral 兑现'
+                                                title="Mở Codex riêng cho tài khoản này"
                                             >
-                                                {launchingIds.has(acc.id) ? '启动中…' : '🚀 启动 codex'}
+                                                {launchingIds.has(acc.id) ? 'Đang mở…' : '🚀 Mở Codex'}
                                             </button>
                                             {effectiveKind(acc) === 'chatgpt_oauth' && (
                                                 <button
@@ -1234,27 +1305,27 @@ export function AccountList({
                                                         });
                                                     }}
                                                     title={priming?.last_error
-                                                        ? `周期保鲜最近错误：${priming.last_error}`
-                                                        : '周期保鲜会在额度窗口到点后自动发一次最小 Codex 请求'}
-                                                >{primingEnabled ? `🌿 周期保鲜 · ${primingLabel}` : `🌿 保鲜已关 · ${primingLabel}`}</button>
+                                                        ? `Lỗi kích hoạt gần nhất: ${priming.last_error}`
+                                                        : 'Tự gửi một yêu cầu Codex tối thiểu khi cửa sổ hạn mức được đặt lại'}
+                                                >{primingEnabled ? `🌿 Tự kích hoạt · ${primingLabel}` : `🌿 Đã tắt · ${primingLabel}`}</button>
                                             )}
                                         </div>
                                     )}
                                 </div>
                                 <div className="col-actions">
-                                    <button className="action-btn refresh" onClick={() => handleRefreshOne(acc.id)} disabled={isRefreshing} title={kind === 'antigravity_oauth' ? '刷新模型额度' : '刷新'}><RefreshCw size={14} className={isRefreshing ? 'spinning' : ''} /></button>
+                                    <button className="action-btn refresh" onClick={() => handleRefreshOne(acc.id)} disabled={isRefreshing} title={kind === 'antigravity_oauth' ? 'Cập nhật hạn mức model' : 'Cập nhật'}><RefreshCw size={14} className={isRefreshing ? 'spinning' : ''} /></button>
                                     {settings.remote_mode === 'client' && effectiveKind(acc) !== 'antigravity_oauth' && (
                                         <button
                                             className="action-btn push"
                                             onClick={() => handlePushToServer(acc.id, acc.name)}
                                             disabled={pushingIds.has(acc.id)}
-                                            title="推送到 Server"
+                                            title="Gửi lên máy chủ"
                                         >
                                             <UploadCloud size={14} className={pushingIds.has(acc.id) ? 'spinning' : ''} />
                                         </button>
                                     )}
                                     {!isCurrent && !isModelRelay && effectiveKind(acc) !== 'antigravity_oauth' && (
-                                        <button className="action-btn switch" onClick={() => onSwitch(acc.id)} disabled={switchingIds.has(acc.id)} title="切换"><ArrowLeftRight size={14} /></button>
+                                        <button className="action-btn switch" onClick={() => onSwitch(acc.id)} disabled={switchingIds.has(acc.id)} title="Chuyển sang"><ArrowLeftRight size={14} /></button>
                                     )}
                                     {isModelRelay && !relayCurrent.allCurrent && <button className="action-btn switch"
                                         onClick={()=>handleSwitchRelayModel(acc.id,acc.name)} disabled={switchingIds.has(acc.id)}
@@ -1264,15 +1335,15 @@ export function AccountList({
                                             className="action-btn switch"
                                             onClick={() => handleSwitchAntigravity(acc.id, acc.name)}
                                             disabled={switchingIds.has(acc.id)}
-                                            title="切换 Google 当前账号（不影响 Codex 当前账号）"
+                                            title="Chuyển tài khoản Google, không đổi tài khoản Codex"
                                         >
                                             <ArrowLeftRight size={14} />
                                         </button>
                                     )}
                                     {effectiveKind(acc) === 'chatgpt_oauth' && (usage?.plan_type ?? '').toLowerCase() !== 'free' && (
-                                        <button className="action-btn invite" onClick={() => openInvite(acc.id, acc.name)} title="ChatGPT 桌面版邀请与奖励"><UserPlus size={14} /></button>
+                                        <button className="action-btn invite" onClick={() => openInvite(acc.id, acc.name)} title="Lời mời và phần thưởng ChatGPT Desktop"><UserPlus size={14} /></button>
                                     )}
-                                    <button className="action-btn delete" onClick={() => setAccountToDelete({ id: acc.id, name: acc.name })} title="删除"><Trash2 size={14} /></button>
+                                    <button className="action-btn delete" onClick={() => setAccountToDelete({ id: acc.id, name: acc.name })} title="Xóa"><Trash2 size={14} /></button>
                                 </div>
                             </div>
                         );
@@ -1286,7 +1357,7 @@ export function AccountList({
                     {filteredAccounts.filter(acc => !acc.is_banned && !acc.is_token_invalid && !acc.is_logged_out).length} khả dụng · {' '}
                     {filteredAccounts.filter(acc => acc.is_token_invalid || acc.is_logged_out).length} cần đăng nhập lại
                 </span>
-                {selectedIds.size > 0 && <span className="selected-info">已选 {selectedIds.size} 个</span>}
+                {selectedIds.size > 0 && <span className="selected-info">Đã chọn {selectedIds.size}</span>}
                 {pushToast && (
                     <span className={`push-toast ${pushToast.type}`} style={{ marginLeft: 'auto' }}>
                         {pushToast.text}
@@ -1353,7 +1424,7 @@ export function AccountList({
                     <div className="modal-content account-expiry-modal window-prime-modal" onClick={e => e.stopPropagation()}>
                         <div className="account-expiry-modal-header">
                             <div>
-                                <h2>周期保鲜</h2>
+                                <h2>Tự kích hoạt chu kỳ</h2>
                                 <p>{primeEditor.name}</p>
                             </div>
                             <button className="close-btn" onClick={() => setPrimeEditor(null)} disabled={savingPrime}>×</button>
@@ -1367,7 +1438,7 @@ export function AccountList({
                                         onChange={e => setPrimeEditor({ ...primeEditor, fiveHour: e.target.checked })}
                                         disabled={savingPrime}
                                     />
-                                    <span><strong>接口返回 · 5 小时窗口</strong><small>按 primary_window 实际时长自动识别</small></span>
+                                    <span><strong>Cửa sổ 5 giờ từ API</strong><small>Tự nhận biết theo thời lượng thật của primary_window</small></span>
                                 </label>
                             ) : (
                                 <label className="window-prime-option">
@@ -1377,15 +1448,15 @@ export function AccountList({
                                         onChange={e => setPrimeEditor({ ...primeEditor, weekly: e.target.checked })}
                                         disabled={savingPrime}
                                     />
-                                    <span><strong>接口返回 · 7 天窗口</strong><small>按 primary_window 实际时长自动识别</small></span>
+                                    <span><strong>Cửa sổ 7 ngày từ API</strong><small>Tự nhận biết theo thời lượng thật của primary_window</small></span>
                                 </label>
                             )}
-                            <p className="account-expiry-help">系统默认自动管理全部订阅号，并以 /wham/usage 返回的 primary_window 实际时长判断 5H 或 7D，不绑定套餐名称。首次遇到无法确认是否激活的 100% 窗口时只发一次极小请求；之后按固定 reset_at 到点触发。这里可以单独关闭该账号，client/solo 模式由 Server 单端执行。</p>
+                            <p className="account-expiry-help">Mặc định Switcher tự quản lý mọi tài khoản đăng ký và dùng thời lượng thật của <code>primary_window</code> để nhận biết cửa sổ 5 giờ hoặc 7 ngày. Mỗi mốc đặt lại chỉ gửi một yêu cầu rất nhỏ; chế độ máy khách chỉ để máy chủ thực hiện nhằm tránh gửi trùng.</p>
                             {(primeEditor.lastAttempt || primeEditor.lastSuccess || primeEditor.lastError) && (
                                 <div className="window-prime-status">
-                                    {primeEditor.lastAttempt && <span>最近尝试：{formatViDateTime(primeEditor.lastAttempt)}</span>}
-                                    {primeEditor.lastSuccess && <span className="ok">最近成功：{formatViDateTime(primeEditor.lastSuccess)}</span>}
-                                    {primeEditor.lastError && <span className="err">最近结果：{primeEditor.lastError}</span>}
+                                    {primeEditor.lastAttempt && <span>Lần thử gần nhất: {formatViDateTime(primeEditor.lastAttempt)}</span>}
+                                    {primeEditor.lastSuccess && <span className="ok">Thành công gần nhất: {formatViDateTime(primeEditor.lastSuccess)}</span>}
+                                    {primeEditor.lastError && <span className="err">Kết quả gần nhất: {primeEditor.lastError}</span>}
                                 </div>
                             )}
                             {primeError && <p className="account-expiry-error">{primeError}</p>}
@@ -1393,9 +1464,12 @@ export function AccountList({
                         <div className="account-expiry-modal-actions">
                             <span></span>
                             <div className="account-expiry-modal-actions-right">
-                                <button className="secondary-btn" onClick={() => setPrimeEditor(null)} disabled={savingPrime}>取消</button>
+                                <button className="secondary-btn" onClick={() => void warmupOne(primeEditor.id, primeEditor.name)} disabled={savingPrime || warmingIds.has(primeEditor.id)}>
+                                    {warmingIds.has(primeEditor.id) ? 'Đang kích hoạt…' : 'Kích hoạt ngay'}
+                                </button>
+                                <button className="secondary-btn" onClick={() => setPrimeEditor(null)} disabled={savingPrime}>Hủy</button>
                                 <button className="primary-btn" onClick={saveWindowPriming} disabled={savingPrime}>
-                                    {savingPrime ? '保存中…' : '保存'}
+                                    {savingPrime ? 'Đang lưu…' : 'Lưu'}
                                 </button>
                             </div>
                         </div>
@@ -1408,19 +1482,19 @@ export function AccountList({
                     <div className="modal-content reset-credit-modal" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <div className="header-top">
-                                <h2>主动重置 · {resetModal.name}</h2>
+                                <h2>Reset chủ động · {resetModal.name}</h2>
                                 <button className="close-btn" onClick={closeResetModal} disabled={resetting}>×</button>
                             </div>
                         </div>
                         <div className="modal-body">
                             {resetListLoading ? (
-                                <p className="modal-tip">正在拉取重置次数明细…</p>
+                                <p className="modal-tip">Đang tải chi tiết các lượt reset…</p>
                             ) : resetListError ? (
-                                <p className="modal-tip err" role="alert">拉取明细失败：{resetListError}<br />当前可用次数无法确认，不代表已清空。请稍后重试查询。</p>
+                                <p className="modal-tip err" role="alert">Không tải được chi tiết: {resetListError}<br />Chưa xác định được số lượt còn lại; hãy thử lại sau.</p>
                             ) : resetList && resetList.length > 0 ? (
                                 <>
                                     <p className="modal-tip" style={{ marginBottom: 10 }}>
-                                        共 <strong>{resetList.length}</strong> 次，按到期时间排序（最早在前）。所有次数<strong>等价</strong>，区别仅到期时间；<strong>消耗哪条由服务端决定</strong>（通常最早到期优先，客户端无法指定）。
+                                        Có <strong>{resetList.length}</strong> lượt, sắp theo thời điểm hết hạn. Các lượt có giá trị như nhau; máy chủ quyết định lượt nào được dùng, thường là lượt hết hạn sớm nhất.
                                     </p>
                                     <ul className="reset-credit-list">
                                         {resetList.map((c, i) => {
@@ -1430,33 +1504,33 @@ export function AccountList({
                                                 <li key={c.id} className={`reset-credit-row ${urgency}`}>
                                                     <span className="rc-mark">{i === 0 ? '▸' : ''}</span>
                                                     <span className="rc-expiry">{fmtExpiry(c.expires_at)}</span>
-                                                    <span className="rc-days">{dl == null ? '' : `剩 ${dl} 天`}</span>
+                                                    <span className="rc-days">{dl == null ? '' : `Còn ${dl} ngày`}</span>
                                                     <span className="rc-source">{c.source}</span>
-                                                    {i === 0 && <span className="rc-badge">将被消耗</span>}
+                                                    {i === 0 && <span className="rc-badge">Sẽ được dùng trước</span>}
                                                 </li>
                                             );
                                         })}
                                     </ul>
                                     <p className="modal-tip" style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
-                                        消耗 1 次会把当前已耗尽的 5H / 周限额窗口立刻清零，此操作不可撤销。若额度还没用到上限，上游会返回「无可重置」且<strong>不扣次数</strong>。
+                                        Dùng một lượt sẽ đặt lại cửa sổ 5 giờ/tuần đã cạn. Không thể hoàn tác. Nếu chưa chạm giới hạn, máy chủ sẽ từ chối và <strong>không trừ lượt</strong>.
                                     </p>
                                 </>
                             ) : (
-                                <p className="modal-tip">该账号当前没有可用的主动重置次数。</p>
+                                <p className="modal-tip">Tài khoản này không còn lượt reset chủ động.</p>
                             )}
                         </div>
                         <div className="modal-footer">
-                            <button type="button" className="btn btn-ghost" onClick={closeResetModal} disabled={resetting}>取消</button>
+                            <button type="button" className="btn btn-ghost" onClick={closeResetModal} disabled={resetting}>Hủy</button>
                             <button type="button" className="btn btn-ghost"
                                 onClick={() => openResetModal(resetModal.id, resetModal.name, resetModal.credits)}
-                                disabled={resetting || resetListLoading}>重新查询</button>
+                                disabled={resetting || resetListLoading}>Tải lại</button>
                             <button
                                 type="button"
                                 className="btn btn-primary"
                                 onClick={handleConsumeReset}
                                 disabled={resetting || resetListLoading || !!resetListError || !resetList?.length}
                             >
-                                {resetting ? '正在重置…' : '立即重置'}
+                                {resetting ? 'Đang reset…' : 'Reset ngay'}
                             </button>
                         </div>
                     </div>
@@ -1468,7 +1542,7 @@ export function AccountList({
                     <div className="modal-content" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
                             <div className="header-top">
-                                <h2>修改 MiMo 配额 Cookie</h2>
+                                <h2>Sửa MiMo Cookie dùng đọc hạn mức</h2>
                                 <button className="close-btn" onClick={() => setCookieEditor(null)} disabled={savingCookie}>
                                     ×
                                 </button>
@@ -1476,7 +1550,7 @@ export function AccountList({
                         </div>
                         <div className="modal-body">
                             <p className="modal-tip" style={{ marginBottom: 12 }}>
-                                账号：{cookieEditor.name}。登录 <code>platform.xiaomimimo.com</code> 后，从 Network 请求里复制 <code>Cookie:</code> header。
+                                Tài khoản: {cookieEditor.name}. Sau khi đăng nhập <code>platform.xiaomimimo.com</code>, hãy sao chép header <code>Cookie:</code> trong Network.
                             </p>
                             <textarea
                                 value={cookieEditor.value}
@@ -1489,10 +1563,10 @@ export function AccountList({
                         </div>
                         <div className="modal-footer">
                             <button type="button" className="btn btn-ghost" onClick={() => setCookieEditor(null)} disabled={savingCookie}>
-                                取消
+                                Hủy
                             </button>
                             <button type="button" className="btn btn-primary" onClick={handleSaveUsageCookie} disabled={savingCookie}>
-                                {savingCookie ? '保存中…' : '保存并刷新'}
+                                {savingCookie ? 'Đang lưu…' : 'Lưu và cập nhật'}
                             </button>
                         </div>
                     </div>

@@ -36,16 +36,16 @@ pub fn init(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 
     // Windows 右键需要真正挂载 native menu；仅监听 TrayIconEvent 会把右键
     // 也当成 popup 点击，系统不会自动生成完整托盘菜单。
-    let show_main = MenuItem::with_id(app, "tray-show-main", "打开主窗口", true, None::<&str>)?;
+    let show_main = MenuItem::with_id(app, "tray-show-main", "Mở cửa sổ chính", true, None::<&str>)?;
     let next_account = MenuItem::with_id(
         app,
         "tray-next-account",
-        "切换到下一个账号",
+        "Chuyển sang tài khoản tiếp theo",
         true,
         None::<&str>,
     )?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let quit = PredefinedMenuItem::quit(app, Some("退出"))?;
+    let quit = PredefinedMenuItem::quit(app, Some("Thoát"))?;
     let menu = Menu::with_items(app, &[&show_main, &next_account, &separator, &quit])?;
 
     let _tray = TrayIconBuilder::with_id("main")
@@ -297,30 +297,54 @@ pub fn show_main_window_from_cmd(app: &AppHandle) {
 /// 修法：tooltip 构建放在内层 block 让 guard 在 set_tooltip 前 drop。
 pub fn update_tray_menu(app: &AppHandle) {
     let state = app.state::<crate::AppState>();
-    let tooltip = {
+    let (tooltip, title, mode) = {
         let store = match state.store.lock() {
             Ok(s) => s,
             Err(_) => return,
         };
-        if let Some(current_id) = &store.current {
+        let mode = store.settings.tray_display_mode;
+        let tooltip = if let Some(current_id) = &store.current {
             if let Some(acc) = store.accounts.get(current_id) {
                 let quota = acc
                     .cached_quota
                     .as_ref()
-                    .map(|q| format!(" | 5H: {:.0}%  周: {:.0}%", q.five_hour_left, q.weekly_left))
+                    .map(|q| format!(" | 5 giờ: {:.0}%  Tuần: {:.0}%", q.five_hour_left, q.weekly_left))
                     .unwrap_or_default();
                 format!("Codex Switcher - {}{}", acc.name, quota)
             } else {
                 "Codex Switcher".to_string()
             }
         } else {
-            "Codex Switcher - 未登录".to_string()
-        }
+            "Codex Switcher - Chưa đăng nhập".to_string()
+        };
+        let title = store.current.as_ref().and_then(|current_id| {
+            store.accounts.get(current_id).map(|acc| {
+                acc.cached_quota
+                    .as_ref()
+                    .map(|q| format!("5H {:.0}% · 7D {:.0}%", q.five_hour_left, q.weekly_left))
+                    .unwrap_or_else(|| acc.name.clone())
+            })
+        });
+        (tooltip, title, mode)
         // store guard 在 block 结束（这一行）时 drop，set_tooltip 在外面跑
     };
 
     if let Some(tray) = app.tray_by_id("main") {
         let _ = tray.set_tooltip(Some(&tooltip));
+        match mode {
+            crate::account::TrayDisplayMode::IconAndSession => {
+                let _ = tray.set_visible(true);
+                let _ = tray.set_title(None::<&str>);
+            }
+            crate::account::TrayDisplayMode::ActiveUsageText => {
+                let _ = tray.set_visible(true);
+                let _ = tray.set_title(title.as_deref());
+            }
+            crate::account::TrayDisplayMode::Hidden => {
+                let _ = tray.set_title(None::<&str>);
+                let _ = tray.set_visible(false);
+            }
+        }
     }
 }
 

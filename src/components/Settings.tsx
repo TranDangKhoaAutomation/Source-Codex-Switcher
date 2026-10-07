@@ -6,6 +6,11 @@ import './Settings.css';
 import { isMacOS } from '../platform';
 
 interface AppSettings {
+    tray_display_mode: 'icon_and_session' | 'active_usage_text' | 'hidden';
+    dock_display_mode: 'show_in_dock' | 'menu_bar_only';
+    scheduled_warmup_enabled: boolean;
+    scheduled_warmup_times: string[];
+    last_scheduled_warmup_key?: string | null;
     start_with_windows: boolean;
     start_minimized: boolean;
     close_to_tray: boolean;
@@ -60,6 +65,10 @@ interface SettingsProps {
 
 export function Settings({ accounts = [], onSetSessionAnchor }: SettingsProps = {}) {
     const [settings, setSettings] = useState<AppSettings>({
+        tray_display_mode: 'active_usage_text',
+        dock_display_mode: 'show_in_dock',
+        scheduled_warmup_enabled: false,
+        scheduled_warmup_times: [],
         start_with_windows: false,
         start_minimized: true,
         close_to_tray: true,
@@ -315,6 +324,39 @@ export function Settings({ accounts = [], onSetSessionAnchor }: SettingsProps = 
                         <option value="agate">Xanh ngọc</option>
                     </select>
                 </div>
+
+                <div className="setting-item">
+                    <div className="setting-info">
+                        <span className="setting-label">Hiển thị trong khay hệ thống</span>
+                        <span className="setting-desc">Chọn chỉ biểu tượng, hiện hạn mức của tài khoản đang dùng, hoặc ẩn hoàn toàn.</span>
+                    </div>
+                    <select
+                        className="select-input"
+                        value={settings.tray_display_mode ?? 'active_usage_text'}
+                        onChange={e => updateField('tray_display_mode', e.target.value as AppSettings['tray_display_mode'])}
+                    >
+                        <option value="icon_and_session">Biểu tượng và phiên hiện tại</option>
+                        <option value="active_usage_text">Hiện hạn mức đang dùng</option>
+                        <option value="hidden">Ẩn khỏi khay hệ thống</option>
+                    </select>
+                </div>
+
+                {isMacOS && (
+                    <div className="setting-item">
+                        <div className="setting-info">
+                            <span className="setting-label">Hiển thị trên Dock</span>
+                            <span className="setting-desc">Có thể giữ biểu tượng trên Dock hoặc chỉ chạy ở thanh menu.</span>
+                        </div>
+                        <select
+                            className="select-input"
+                            value={settings.dock_display_mode ?? 'show_in_dock'}
+                            onChange={e => updateField('dock_display_mode', e.target.value as AppSettings['dock_display_mode'])}
+                        >
+                            <option value="show_in_dock">Hiện trên Dock</option>
+                            <option value="menu_bar_only">Chỉ thanh menu</option>
+                        </select>
+                    </div>
+                )}
             </div>
 
             <div className="settings-section">
@@ -394,6 +436,40 @@ export function Settings({ accounts = [], onSetSessionAnchor }: SettingsProps = 
                         </span>
                     </label>
                 </div>
+
+                <div className="setting-item">
+                    <div className="setting-info">
+                        <span className="setting-label">Warm-up theo giờ cố định</span>
+                        <span className="setting-desc">Gửi yêu cầu tối thiểu cho các tài khoản đăng ký vào giờ đã chọn. Chạy nền ngay cả khi cửa sổ đã đóng; mặc định tắt để không dùng quota ngoài ý muốn.</span>
+                    </div>
+                    <label className="toggle">
+                        <input
+                            type="checkbox"
+                            checked={settings.scheduled_warmup_enabled ?? false}
+                            onChange={e => updateField('scheduled_warmup_enabled', e.target.checked)}
+                        />
+                        <span className="toggle-slider"></span>
+                    </label>
+                </div>
+
+                {settings.scheduled_warmup_enabled && (
+                    <div className="setting-item sub-item">
+                        <div className="setting-info">
+                            <span className="setting-label">Các mốc giờ mỗi ngày</span>
+                            <span className="setting-desc">Nhập theo giờ máy, cách nhau bằng dấu phẩy, ví dụ: 08:00, 13:30, 20:00.</span>
+                        </div>
+                        <input
+                            className="text-input"
+                            type="text"
+                            value={(settings.scheduled_warmup_times ?? []).join(', ')}
+                            onChange={e => updateField('scheduled_warmup_times', e.target.value
+                                .split(',')
+                                .map(value => value.trim())
+                                .filter(value => /^([01]\d|2[0-3]):[0-5]\d$/.test(value)))}
+                            placeholder="08:00, 13:30, 20:00"
+                        />
+                    </div>
+                )}
 
                 <div className="setting-item">
                     <div className="setting-info">
