@@ -29,6 +29,36 @@ Codex Switcher là ứng dụng desktop quản lý nhiều tài khoản Codex, t
 - Có thể chạy nền và tự khởi động cùng hệ điều hành.
 - Giao diện tiếng Việt, giữ nguyên các tên kỹ thuật như OAuth, Relay, GLM, API Key, WebSocket, Responses và Chat Completions.
 
+## Đối chiếu với các tính năng gốc
+
+Các tính năng dưới đây vẫn còn trong phiên bản hiện tại. Một số tính năng đã được mở rộng hoặc đổi tên so với giao diện cũ:
+
+| Tính năng gốc | Vị trí hoặc tên hiện tại |
+| --- | --- |
+| Quản lý nhiều tài khoản | Trang `Tài khoản`, hỗ trợ OAuth, API Key, Relay và Google Antigravity |
+| Chuyển nhanh tài khoản | Trang `Tài khoản`, `Tổng quan` và popup khay hệ thống |
+| Theo dõi quota | Quota 5 giờ, quota tuần, Spark và Luna Reserve |
+| Usage Stats | Trang `Thống kê` và `Bộ nhớ` |
+| Manual Reset Credits | Huy hiệu reset credit trong từng tài khoản, có danh sách ngày hết hạn và nút sử dụng |
+| Automatic Warm-Up | Được mở rộng thành `Giữ chu kỳ quota`, tự kích hoạt cửa sổ 5 giờ hoặc 7 ngày sau reset |
+| System Tray Controls | Popup khay hệ thống và menu chuột phải |
+| Rate-Limit Monitoring | Theo dõi 5 giờ, tuần, Spark, Luna Reserve, thời điểm reset và ngày hết hạn gói |
+| Blocked Switch Recovery | Chuyển nóng qua proxy, làm mới WebSocket và công cụ đóng tiến trình Codex khi cần |
+| Dual Login Mode | OAuth chính thức, nhập `auth.json`, OTP, API Key và nhập hàng loạt |
+| Chạy nền | Tự khởi động cùng Windows, thu nhỏ xuống khay và tiếp tục chạy proxy |
+
+## Ảnh giao diện
+
+<img src="assets/images/1.png" alt="Tổng quan Codex Switcher" width="100%">
+
+<img src="assets/images/2.png" alt="Danh sách tài khoản và quota" width="100%">
+
+<img src="assets/images/3.png" alt="Cấu hình proxy" width="100%">
+
+<img src="assets/images/9.png" alt="Danh sách Session Routing" width="100%">
+
+<img src="assets/images/10.png" alt="Thêm Session Route" width="100%">
+
 ## Cách hoạt động
 
 ```mermaid
@@ -95,6 +125,49 @@ Khi tắt tùy chọn này, Switcher dùng chế độ thông minh, trong đó l
 
 Tùy chọn **Tự quay lại tài khoản ưu tiên cao** cho phép Switcher trở về tài khoản ưu tiên nhỏ hơn khi quota của tài khoản đó đã phục hồi đến ngưỡng cấu hình.
 
+### Spark và Luna Reserve
+
+Ngoài hai quota chính, Switcher còn đọc các cửa sổ độc lập khi tài khoản được OpenAI cấp:
+
+- `Spark`: quota riêng của dòng model GPT Codex Spark, gồm cửa sổ ngắn hạn và cửa sổ tuần.
+- `Luna Reserve`: quota dự phòng riêng cho model Luna được hỗ trợ.
+
+Các quota này không bị gộp vào thanh 5 giờ hoặc quota tuần thông thường. Khi model đang dùng có quota dự phòng hợp lệ, Switcher không chuyển tài khoản chỉ vì quota chính đã hết.
+
+### Reset credit chủ động
+
+Với tài khoản có reset credit, ứng dụng hiển thị huy hiệu `🔄 N` cạnh loại gói.
+
+- Nhấn vào huy hiệu để xem từng credit và ngày hết hạn.
+- Danh sách được sắp theo thời điểm hết hạn gần nhất.
+- Credit sắp hết hạn được cảnh báo bằng màu.
+- Chỉ khi xác nhận, ứng dụng mới gửi yêu cầu sử dụng một credit.
+- Sau khi sử dụng, quota và số credit được tải lại.
+
+Reset credit là tài nguyên thật của tài khoản. Thao tác thành công không thể hoàn tác.
+
+### Giữ chu kỳ quota
+
+Giữ chu kỳ quota là phiên bản mở rộng của tính năng Automatic Warm-Up trong ứng dụng gốc. Switcher gửi một yêu cầu Codex tối thiểu để bắt đầu cửa sổ quota mới đúng lúc cần thiết.
+
+Quy tắc hiện tại:
+
+- Nhận dạng cửa sổ theo thời lượng API trả về, không suy đoán từ tên gói.
+- `18000` giây được hiểu là cửa sổ 5 giờ.
+- `604800` giây được hiểu là cửa sổ 7 ngày.
+- Tài khoản chỉ có quota tuần sẽ dùng chế độ giữ chu kỳ tuần.
+- Mỗi sự kiện reset chỉ được thử một lần để tránh tiêu hao Token lặp lại.
+- Trạng thái đã thử được lưu trước khi gửi yêu cầu, nên lỗi mạng hoặc timeout không gây gửi trùng.
+- Trong chế độ máy khách, máy chủ là nơi duy nhất thực hiện giữ chu kỳ để tránh hai máy cùng gửi.
+
+Có thể bật hoặc tắt riêng tính năng này trên từng tài khoản.
+
+### Ngày hết hạn tài khoản và gói
+
+Switcher ưu tiên lấy ngày hết hạn gói từ metadata của tài khoản hoặc claim OAuth. Nếu nhà cung cấp không trả dữ liệu, người dùng có thể nhập ngày hết hạn thủ công để quản lý tài khoản ngắn hạn.
+
+Ngày hết hạn gói được lưu riêng với thời điểm hết hạn Access Token; hai giá trị này không được dùng thay thế cho nhau.
+
 ## Các trang trong ứng dụng
 
 | Trang | Chức năng |
@@ -122,6 +195,27 @@ Codex Switcher hỗ trợ:
 - Đổi tên, vô hiệu hóa, xóa hoặc đăng nhập lại tài khoản.
 - Đặt số ưu tiên riêng cho từng tài khoản.
 - Tự làm mới Access Token khi Refresh Token còn hợp lệ.
+
+### Lời mời và referral
+
+Với tài khoản đủ điều kiện, ứng dụng có thể gửi lời mời Codex từ ngay trong danh sách tài khoản:
+
+- Nhập một hoặc nhiều email nhận lời mời.
+- Hiển thị kết quả riêng cho từng địa chỉ.
+- Không tự gửi lại một yêu cầu POST khi kết quả chưa rõ, tránh tạo lời mời trùng.
+- Phân biệt referral với reset credit; đây là hai loại tài nguyên khác nhau.
+
+### Google Antigravity
+
+Google Antigravity là một loại tài khoản độc lập với tài khoản OpenAI hiện tại:
+
+- Đăng nhập bằng Google OAuth.
+- Tự phát hiện project và danh sách model được cấp.
+- Hiển thị quota theo từng model Gemini hoặc Claude.
+- Làm mới Token và quota theo luồng riêng.
+- Chuyển đổi yêu cầu Responses sang định dạng Google tương ứng.
+- Hỗ trợ tool call và luồng SSE.
+- Có tài khoản hiện tại riêng, không ghi đè `~/.codex/auth.json` của OpenAI.
 
 ## Relay và Coding Plan
 
@@ -181,6 +275,62 @@ POST http://127.0.0.1:18080/v1/chat/completions
 ```
 
 Switcher chuyển yêu cầu Chat Completions sang Responses, dùng tài khoản được chọn và chuyển kết quả về định dạng Chat Completions. Function calling và luồng SSE được hỗ trợ.
+
+## Thống kê, lịch sử và cache
+
+Trang `Thống kê` tổng hợp:
+
+- Input Token, Output Token và Cached Token.
+- Chi phí ước tính theo model.
+- Số yêu cầu và số lần chuyển tài khoản.
+- Lý do chuyển: quota, `401`, `429`, lỗi trong luồng, WebSocket hoặc thao tác thủ công.
+- Lịch sử quota theo chu kỳ.
+- Ước tính dung lượng gói từ thay đổi quota và Token thực tế.
+- Phân bố model và hoạt động theo thời gian.
+
+Trang `Bộ nhớ` cung cấp:
+
+- Session affinity giữa phiên và tài khoản.
+- Prompt cache key riêng theo tài khoản.
+- Cached input Token và mức tiết kiệm cache.
+- Lịch sử yêu cầu gần đây.
+
+## Chế độ máy chủ và máy khách
+
+Switcher hỗ trợ dùng chung trạng thái giữa nhiều máy:
+
+- `off`: máy hiện tại hoạt động độc lập.
+- `server`: máy hiện tại giữ tài khoản, Token và API điều khiển trung tâm.
+- `client`: máy hiện tại lấy tài khoản, quota và Token lease từ máy chủ.
+- `solo`: máy hiện tại tự quản lý tài khoản nhưng vẫn đồng bộ dữ liệu cần thiết với máy chủ.
+
+Có thể cấu hình địa chỉ chính, địa chỉ dự phòng, cổng và shared secret. Chế độ này phù hợp khi một máy chạy proxy liên tục còn máy khác chỉ dùng giao diện hoặc IDE.
+
+## Quản lý Skills
+
+Trang `Kỹ năng` hỗ trợ:
+
+- Quét Skills đã có trên máy.
+- Thêm nguồn từ GitHub hoặc thư mục cục bộ.
+- Cài đặt và gỡ Skills.
+- Xem nội dung Skill trước khi sử dụng.
+- Đồng bộ Skills giữa máy chủ và máy khách.
+- Tạo liên kết dùng chung cho Codex, Claude, Gemini, OpenCode, Grok, Kimi và Antigravity khi công cụ tương ứng có mặt.
+- Thiết lập danh sách không đồng bộ cho các Skill chỉ dùng trên một máy.
+
+## Khay hệ thống và tích hợp IDE
+
+Khi đóng cửa sổ nhưng vẫn bật chạy nền, ứng dụng tiếp tục giữ proxy hoạt động trong khay hệ thống.
+
+Popup khay hệ thống cho phép:
+
+- Xem tài khoản hiện tại và quota.
+- Xem trạng thái proxy.
+- Chuyển nhanh sang tài khoản tiếp theo.
+- Làm mới dữ liệu.
+- Mở cửa sổ chính hoặc thoát ứng dụng.
+
+Ứng dụng hỗ trợ quy trình reload hoặc khởi động lại Windsurf, Antigravity, Cursor, VS Code và Codex App sau khi chuyển tài khoản. Công cụ khôi phục chuyển tài khoản có thể đóng tiến trình Codex đang giữ tệp hoặc phiên cũ trước khi thử lại.
 
 ## Khởi động cùng hệ điều hành
 
