@@ -436,19 +436,19 @@ mod tests {
     fn real_files() {
         let cases = [
             (
-                "/Users/xiaojian/Downloads/chrome/sub2api-import.json",
+                "/Users/tester/Downloads/chrome/sub2api-import.json",
                 "sub2api",
             ),
             (
-                "/Users/xiaojian/Downloads/chrome/cockpit-import.json",
+                "/Users/tester/Downloads/chrome/cockpit-import.json",
                 "cockpit",
             ),
             (
-                "/Users/xiaojian/Downloads/chrome/accounts_refresh_tokens.txt",
+                "/Users/tester/Downloads/chrome/accounts_refresh_tokens.txt",
                 "four-segment-rt",
             ),
             (
-                "/Users/xiaojian/Downloads/chrome/codex_credentials_2026-05-06_10-30-01_CST.zip",
+                "/Users/tester/Downloads/chrome/codex_credentials_2026-05-06_10-30-01_CST.zip",
                 "cpa",
             ),
         ];

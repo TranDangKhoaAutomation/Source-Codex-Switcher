@@ -5,7 +5,7 @@
 // @version      6.7.0
 // @description  前端辅助：拦截 JSON/Fetch/XHR 中的售罄态、解除购买按钮 disabled，并尝试绕过 Vue 组件禁用点击。仅改浏览器表现，后端库存/风控仍以官方为准。邀请码新购可减 5%：https://www.bigmodel.cn/glm-coding?ic=EVDHUUYDNB
 // @description:en Frontend helper: unlock sold-out UI flags and disabled buy buttons on bigmodel.cn. Does not change backend stock/risk rules.
-// @author       xiaojian
+// @author       Trần Đăng Khoa
 // @match        *://www.bigmodel.cn/*
 // @match        *://bigmodel.cn/*
 // @match        *://*.bigmodel.cn/*

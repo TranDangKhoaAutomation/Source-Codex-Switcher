@@ -509,6 +509,6 @@ Khi gửi thay đổi:
 
 Dự án được phát triển từ mã nguồn Codex Switcher và tiếp tục được tùy chỉnh cho quy trình sử dụng nhiều tài khoản, proxy cục bộ và giao diện tiếng Việt.
 
-**Bản quyền phần phát triển và tùy chỉnh © 2026 Trần Đăng Khoa.** Phần mã nguồn gốc vẫn được ghi công theo nội dung trong tệp giấy phép.
+**Bản quyền © 2026 Trần Đăng Khoa.**
 
 Phát hành theo giấy phép MIT. Xem [LICENSE](LICENSE).
