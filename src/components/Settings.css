@@ -106,7 +106,7 @@
 
 /* ===== 分区容器 (外框) ===== */
 .settings-section {
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--card-bg);
     border: 1px solid var(--border-color);
     border-radius: 16px;
     padding: 24px;
@@ -340,7 +340,7 @@
     align-items: center;
     gap: 6px;
     padding: 8px 16px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--section-bg);
     color: var(--text-primary) !important;
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -353,7 +353,7 @@
 }
 
 .github-link:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--hover-bg);
     border-color: var(--primary-color);
     transform: translateY(-1px);
 }

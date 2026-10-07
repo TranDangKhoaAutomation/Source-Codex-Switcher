@@ -394,7 +394,7 @@
 }
 
 .col-email:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--hover-bg);
 }
 
 .email-text {
@@ -1137,7 +1137,7 @@
     padding: 12px 14px;
     border: 1px solid var(--border-color);
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.025);
+    background: var(--section-bg);
     cursor: pointer;
 }
 
@@ -1174,7 +1174,7 @@
     gap: 4px;
     padding: 9px 11px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--section-bg);
     color: var(--text-muted);
     font-size: 11px;
 }

@@ -302,10 +302,13 @@ export function Stats() {
                                 {profileStats.daily.length ? (
                                     <ResponsiveContainer width="100%" height={180}>
                                         <BarChart data={profileStats.daily.slice(-30)}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                                            <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
                                             <XAxis dataKey="date" hide />
-                                            <YAxis tickFormatter={formatTokens} fontSize={10} />
-                                            <Tooltip formatter={value => [formatTokens(Number(value)), 'Token']} />
+                                            <YAxis tickFormatter={formatTokens} fontSize={10} stroke="var(--chart-axis)" />
+                                            <Tooltip
+                                                formatter={value => [formatTokens(Number(value)), 'Token']}
+                                                contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--chart-tooltip-border)', borderRadius: 8, boxShadow: 'var(--chart-tooltip-shadow)', color: 'var(--text-primary)' }}
+                                            />
                                             <Bar dataKey="tokens" fill="#6366f1" radius={[3, 3, 0, 0]} />
                                         </BarChart>
                                     </ResponsiveContainer>
@@ -472,12 +475,12 @@ export function Stats() {
                     <h3>Xu hướng token</h3>
                     <ResponsiveContainer width="100%" height={250}>
                         <AreaChart data={trendData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                            <XAxis dataKey="label" stroke="rgba(255,255,255,0.3)" fontSize={11} />
-                            <YAxis stroke="rgba(255,255,255,0.3)" fontSize={11} tickFormatter={formatTokens} />
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                            <XAxis dataKey="label" stroke="var(--chart-axis)" fontSize={11} />
+                            <YAxis stroke="var(--chart-axis)" fontSize={11} tickFormatter={formatTokens} />
                             <Tooltip
-                                contentStyle={{ background: '#1e1245', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
-                                labelStyle={{ color: '#fff' }}
+                                contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--chart-tooltip-border)', borderRadius: 8, boxShadow: 'var(--chart-tooltip-shadow)', color: 'var(--text-primary)' }}
+                                labelStyle={{ color: 'var(--text-primary)' }}
                             />
                             <Area type="monotone" dataKey="input" stackId="1" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.4} name="Input" />
                             <Area type="monotone" dataKey="output" stackId="1" stroke="#10b981" fill="#10b981" fillOpacity={0.4} name="Output" />
@@ -494,11 +497,11 @@ export function Stats() {
                         <h3>Xu hướng chi phí</h3>
                         <ResponsiveContainer width="100%" height={200}>
                             <BarChart data={trendData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                                <XAxis dataKey="label" stroke="rgba(255,255,255,0.3)" fontSize={11} />
-                                <YAxis stroke="rgba(255,255,255,0.3)" fontSize={11} tickFormatter={v => `$${v}`} />
+                                <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                                <XAxis dataKey="label" stroke="var(--chart-axis)" fontSize={11} />
+                                <YAxis stroke="var(--chart-axis)" fontSize={11} tickFormatter={v => `$${v}`} />
                                 <Tooltip
-                                    contentStyle={{ background: '#1e1245', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
+                                    contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--chart-tooltip-border)', borderRadius: 8, boxShadow: 'var(--chart-tooltip-shadow)', color: 'var(--text-primary)' }}
                                     formatter={(v) => [`$${Number(v).toFixed(4)}`, 'Chi phí']}
                                 />
                                 <Bar dataKey="cost" fill="#fbbf24" radius={[4, 4, 0, 0]} />
@@ -526,7 +529,7 @@ export function Stats() {
                                     ))}
                                 </Pie>
                                 <Tooltip
-                                    contentStyle={{ background: '#1e1245', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
+                                    contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--chart-tooltip-border)', borderRadius: 8, boxShadow: 'var(--chart-tooltip-shadow)', color: 'var(--text-primary)' }}
                                 />
                                 <Legend />
                             </PieChart>

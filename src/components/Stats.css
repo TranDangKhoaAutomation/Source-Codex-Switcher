@@ -47,7 +47,7 @@
 }
 
 .range-btn:hover:not(.active) {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--hover-bg);
 }
 
 /* 摘要卡片 */
@@ -191,12 +191,12 @@
     gap: 8px;
     padding: 8px 12px;
     font-size: 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid var(--border-color);
     transition: background 0.1s;
 }
 
 .log-row:hover {
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--hover-bg);
 }
 
 .log-time {
@@ -270,7 +270,7 @@
 .quota-plan.plan-plus    { background: rgba(59, 130, 246, 0.22);  color: #3b82f6; }
 .quota-plan.plan-pro     { background: rgba(168, 85, 247, 0.22);  color: #a855f7; }
 .quota-plan.plan-team    { background: rgba(16, 185, 129, 0.22);  color: #10b981; }
-.quota-plan.plan-unknown { background: rgba(255, 255, 255, 0.08); color: var(--text-muted); }
+.quota-plan.plan-unknown { background: var(--badge-bg); color: var(--text-muted); }
 
 /* 配额对比汇总表 */
 .cycle-summary {
@@ -287,11 +287,11 @@
     padding: 8px 10px;
     border-radius: 6px;
     font-size: 12px;
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--section-bg);
 }
 
 .cycle-summary-row.cycle-summary-header {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--hover-bg);
     color: var(--text-muted);
     font-size: 10px;
     font-weight: 600;
@@ -345,11 +345,11 @@
     padding: 6px 8px;
     border-radius: 4px;
     font-size: 11px;
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--section-bg);
 }
 
 .cycle-row.cycle-header {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--hover-bg);
     color: var(--text-muted);
     font-size: 10px;
     font-weight: 600;
@@ -361,7 +361,7 @@
 }
 
 .cycle-row:not(.cycle-header):hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--hover-bg);
 }
 
 .cycle-row.current {
@@ -441,7 +441,7 @@
     padding: 8px 10px;
     border-radius: 6px;
     font-size: 12px;
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--section-bg);
 }
 
 .acct-hist-row.acct-hist-header {
@@ -465,11 +465,11 @@
 }
 
 .acct-hist-row.clickable:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--hover-bg);
 }
 
 .acct-hist-row.acct-hist-header {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--hover-bg);
     color: var(--text-muted);
     font-size: 10px;
     font-weight: 600;
@@ -561,7 +561,7 @@
 }
 
 .acct-hist-expand {
-    background: rgba(255, 255, 255, 0.015);
+    background: var(--section-bg);
     border-radius: 6px;
     padding: 12px 16px;
     margin: 4px 0 8px 24px;
@@ -601,7 +601,7 @@
     padding: 5px 8px;
     border-radius: 4px;
     font-size: 11px;
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--section-bg);
 }
 
 .hist-cycle-row.clickable {
@@ -609,11 +609,11 @@
 }
 
 .hist-cycle-row.clickable:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--hover-bg);
 }
 
 .hist-cycle-row.hist-cycle-header {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--hover-bg);
     color: var(--text-muted);
     font-size: 10px;
     font-weight: 600;
@@ -643,7 +643,7 @@
     display: flex;
     flex-direction: column;
     gap: 1px;
-    background: rgba(255, 255, 255, 0.015);
+    background: var(--section-bg);
     padding: 6px 8px 6px 28px;
     border-radius: 4px;
     margin: 2px 0 6px;

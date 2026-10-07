@@ -1,6 +1,4 @@
-/* AddRouteModal — picks (session, account) pair.
- * Reuses the .cs-relay-modal* shell from AddRelayModal.css for the overall
- * dark-themed modal frame; this file only adds the route-specific bits. */
+/* AddRouteModal — picks (session, account) pair and inherits the app theme. */
 
 .cs-route-modal__body-grid {
     display: flex;
@@ -10,7 +8,7 @@
 
 /* Section block — visual grouping of the three steps */
 .cs-route-section {
-    background: rgba(15, 23, 42, 0.4);
+    background: var(--r-bg-elevated, var(--section-bg));
     border: 1px solid var(--r-border, #1e293b);
     border-radius: 10px;
     padding: 12px 14px;

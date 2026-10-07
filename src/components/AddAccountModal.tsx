@@ -542,7 +542,7 @@ export function AddAccountModal({ isOpen, onClose, onAdd, onSuccess }: AddAccoun
                                     ))}
                                     {bulkResult.accounts.length > 0 && (
                                         <details style={{ marginTop: 8 }}>
-                                            <summary style={{ cursor: 'pointer', color: '#aaa', fontSize: '12.5px', padding: '6px 0' }}>
+                                            <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '12.5px', padding: '6px 0' }}>
                                                 新增账号详情（{bulkResult.accounts.length}）
                                             </summary>
                                             <table className="bulk-table">

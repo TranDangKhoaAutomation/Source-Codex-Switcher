@@ -1,13 +1,14 @@
 .cache-panel {
     padding: 20px 24px 40px;
-    color: #e8e8e8;
+    color: var(--text-primary);
+    background: var(--bg-primary);
     overflow-y: auto;
     height: 100%;
 }
 
 .cache-loading {
     text-align: center;
-    color: #888;
+    color: var(--text-muted);
     padding: 40px;
 }
 
@@ -27,13 +28,15 @@
 .cache-controls {
     display: flex;
     gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
 }
 
 .cache-controls select,
 .cache-controls button {
-    background: #2a2a2a;
-    border: 1px solid #3a3a3a;
-    color: #e8e8e8;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    color: var(--text-primary);
     padding: 6px 12px;
     border-radius: 4px;
     font-size: 13px;
@@ -42,14 +45,22 @@
 
 .cache-controls button:hover,
 .cache-controls select:hover {
-    background: #333;
+    background: var(--hover-bg);
+    border-color: var(--primary-color);
+}
+
+.cache-controls button:focus-visible,
+.cache-controls select:focus-visible,
+.cache-toggle:focus-within {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
 }
 
 .cache-toggle {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    color: #aaa;
+    color: var(--text-secondary);
     font-size: 12px;
     cursor: pointer;
     user-select: none;
@@ -59,16 +70,17 @@
 .cache-toggle input[type=checkbox] {
     margin: 0;
     cursor: pointer;
+    accent-color: var(--primary-color);
 }
 
 /* 旧数据行：整行灰一档 */
 .cache-row-unknown td {
-    color: #666 !important;
+    color: var(--text-muted) !important;
     font-style: italic;
 }
 .cache-row-unknown .cache-cached,
 .cache-row-unknown .cache-saved {
-    color: #4a4a4a !important;
+    opacity: 0.7;
 }
 
 /* KPI 行 */
@@ -82,8 +94,8 @@
 .kpi-tile {
     border-radius: 8px;
     padding: 14px 16px;
-    background: #1f1f1f;
-    border: 1px solid #2c2c2c;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
     position: relative;
     overflow: hidden;
 }
@@ -104,7 +116,7 @@
 
 .kpi-label {
     font-size: 12px;
-    color: #999;
+    color: var(--text-secondary);
     margin-bottom: 6px;
 }
 
@@ -117,13 +129,13 @@
 
 .kpi-sub {
     font-size: 11px;
-    color: #666;
+    color: var(--text-muted);
 }
 
 /* 卡片 */
 .cache-card {
-    background: #1a1a1a;
-    border: 1px solid #2a2a2a;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 14px 16px;
     margin-bottom: 16px;
@@ -131,13 +143,13 @@
 
 .cache-card-title {
     font-size: 13px;
-    color: #aaa;
+    color: var(--text-secondary);
     margin-bottom: 10px;
     font-weight: 500;
 }
 
 .cache-empty {
-    color: #666;
+    color: var(--text-muted);
     font-size: 13px;
     padding: 24px 0;
     text-align: center;
@@ -152,29 +164,29 @@
 
 .cache-table thead th {
     text-align: left;
-    color: #888;
+    color: var(--text-muted);
     font-weight: 500;
     padding: 6px 8px;
-    border-bottom: 1px solid #2c2c2c;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .cache-table tbody td {
     padding: 6px 8px;
-    border-bottom: 1px solid #232323;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .cache-table tbody tr:hover {
-    background: #1f1f1f;
+    background: var(--hover-bg);
 }
 
 .cache-table-name {
     font-family: ui-monospace, SFMono-Regular, monospace;
-    color: #cfcfcf;
+    color: var(--text-primary);
 }
 
 .cache-table-key {
     font-family: ui-monospace, SFMono-Regular, monospace;
-    color: #999;
+    color: var(--text-secondary);
     max-width: 320px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -189,4 +201,21 @@
 .cache-saved {
     color: #3b82f6;
     font-weight: 500;
+}
+
+.cache-panel .recharts-default-tooltip {
+    color: var(--text-primary) !important;
+}
+
+.cache-panel .recharts-tooltip-label,
+.cache-panel .recharts-legend-item-text {
+    color: var(--text-secondary) !important;
+}
+
+@media (max-width: 900px) {
+    .cache-header {
+        align-items: flex-start;
+        gap: 12px;
+        flex-direction: column;
+    }
 }

@@ -56,7 +56,7 @@
     display: block;
     margin-top: 8px;
     padding: 8px;
-    background: var(--bg-tertiary);
+    background: var(--section-bg);
     border-radius: 6px;
     color: var(--text-primary);
     font-family: monospace;
@@ -65,7 +65,7 @@
 
 .confirm-footer {
     padding: 16px 24px;
-    background: var(--bg-tertiary);
+    background: var(--section-bg);
     border-top: 1px solid var(--border-color);
     border-radius: 0 0 12px 12px;
     display: flex;
@@ -104,8 +104,58 @@
 }
 
 .btn-cancel:hover {
-    background: var(--bg-tertiary);
+    background: var(--hover-bg);
     color: var(--text-primary);
+}
+
+.relay-import-source {
+    margin-top: 0;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.relay-import-table {
+    width: 100%;
+    margin-top: 8px;
+    color: var(--text-primary);
+    font-size: 13px;
+    text-align: left;
+}
+
+.relay-import-table th,
+.relay-import-table td {
+    padding: 4px 8px 4px 0;
+    vertical-align: top;
+}
+
+.relay-import-table th {
+    width: 92px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.relay-import-table td {
+    overflow-wrap: anywhere;
+}
+
+.relay-import-note {
+    margin-top: 12px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    text-align: left;
+}
+
+.relay-import-note.warning {
+    background: color-mix(in srgb, var(--warning-color) 12%, var(--card-bg));
+    border: 1px solid color-mix(in srgb, var(--warning-color) 28%, var(--border-color));
+    color: var(--warning-color);
+}
+
+.relay-import-note.error {
+    background: color-mix(in srgb, var(--danger-color) 10%, var(--card-bg));
+    border: 1px solid color-mix(in srgb, var(--danger-color) 25%, var(--border-color));
+    color: var(--danger-color);
 }
 
 @keyframes fadeIn {

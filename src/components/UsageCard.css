@@ -3,7 +3,7 @@
     align-items: center;
     gap: 10px;
     padding: 12px;
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--section-bg);
     border-radius: 8px;
 }
 
@@ -88,7 +88,7 @@
 
 .meter-bar {
     height: 6px;
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--badge-bg);
     border-radius: 3px;
     overflow: hidden;
     margin-bottom: 8px;

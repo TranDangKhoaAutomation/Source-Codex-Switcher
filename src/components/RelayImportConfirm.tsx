@@ -68,69 +68,69 @@ export function RelayImportConfirm() {
       <div className="modal-content confirm-modal" onClick={(e) => e.stopPropagation()}>
         <div className="confirm-header">
           <div className="confirm-icon">🔗</div>
-          <h3 className="confirm-title">导入中转站账号</h3>
+          <h3 className="confirm-title">Nhập tài khoản relay</h3>
         </div>
 
         <div className="confirm-body">
-          <p style={{ marginTop: 0, color: '#6b7280', fontSize: 13 }}>
-            来源: <code>{pending.source}://</code> deep link
+          <p className="relay-import-source">
+            Nguồn: <code>{pending.source}://</code> deep link
           </p>
 
-          <table style={{ width: '100%', fontSize: 13, marginTop: 8 }}>
+          <table className="relay-import-table">
             <tbody>
               <tr>
-                <td style={{ color: '#6b7280', padding: '4px 8px 4px 0', verticalAlign: 'top' }}>名称</td>
-                <td style={{ padding: '4px 0', wordBreak: 'break-all' }}>{pending.name}</td>
+                <th>Tên</th>
+                <td>{pending.name}</td>
               </tr>
               <tr>
-                <td style={{ color: '#6b7280', padding: '4px 8px 4px 0', verticalAlign: 'top' }}>Base URL</td>
-                <td style={{ padding: '4px 0', wordBreak: 'break-all', fontFamily: 'ui-monospace, Menlo, monospace' }}>
+                <th>Base URL</th>
+                <td style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>
                   {pending.base_url}
                 </td>
               </tr>
               <tr>
-                <td style={{ color: '#6b7280', padding: '4px 8px 4px 0', verticalAlign: 'top' }}>API Key</td>
-                <td style={{ padding: '4px 0', fontFamily: 'ui-monospace, Menlo, monospace' }}>
+                <th>API Key</th>
+                <td style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>
                   {maskKey(pending.api_key)}
                 </td>
               </tr>
               {pending.homepage && (
                 <tr>
-                  <td style={{ color: '#6b7280', padding: '4px 8px 4px 0', verticalAlign: 'top' }}>主页</td>
-                  <td style={{ padding: '4px 0', wordBreak: 'break-all' }}>{pending.homepage}</td>
+                  <th>Trang chủ</th>
+                  <td>{pending.homepage}</td>
                 </tr>
               )}
               <tr>
-                <td style={{ color: '#6b7280', padding: '4px 8px 4px 0', verticalAlign: 'top' }}>Usage</td>
-                <td style={{ padding: '4px 0' }}>
+                <th>Usage</th>
+                <td>
                   {pending.usage_preset
                     ? <code>{pending.usage_preset}</code>
-                    : <span style={{ color: '#9ca3af' }}>不拉取</span>}
+                    : <span style={{ color: 'var(--text-muted)' }}>Không lấy dữ liệu</span>}
                 </td>
               </tr>
             </tbody>
           </table>
 
           {pending.usage_script_unknown && (
-            <p style={{ marginTop: 12, padding: '8px 10px', background: '#fef3c7', color: '#92400e', borderRadius: 4, fontSize: 12 }}>
-              ⚠️ 链接里携带的 <code>usageScript</code> 未在内置白名单中，已忽略。账号仍可正常使用，
-              但额度查询不会自动进行。导入后可在账号详情中手动选 usage preset。
+            <p className="relay-import-note warning">
+              ⚠️ <code>usageScript</code> trong liên kết không nằm trong danh sách an toàn nên đã bị bỏ qua.
+              Tài khoản vẫn dùng được, nhưng ứng dụng sẽ không tự lấy hạn mức. Sau khi nhập, bạn có thể chọn usage preset trong chi tiết tài khoản.
             </p>
           )}
 
           {error && (
-            <p style={{ marginTop: 12, padding: '8px 10px', background: '#fee2e2', color: '#991b1b', borderRadius: 4, fontSize: 12 }}>
-              导入失败: {error}
+            <p className="relay-import-note error">
+              Nhập thất bại: {error}
             </p>
           )}
         </div>
 
         <div className="confirm-footer">
           <button className="btn-cancel" onClick={close} disabled={submitting}>
-            取消
+            Hủy
           </button>
           <button className="btn-confirm" onClick={onConfirm} disabled={submitting}>
-            {submitting ? '导入中…' : '导入'}
+            {submitting ? 'Đang nhập…' : 'Nhập tài khoản'}
           </button>
         </div>
       </div>

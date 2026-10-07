@@ -64,7 +64,7 @@ interface Props {
     accounts: AccountInfo[];
 }
 
-const UNKNOWN_LABEL = '(早期数据·无 account)';
+const UNKNOWN_LABEL = '(Dữ liệu cũ, không có tài khoản)';
 
 export default function CachePanel({ accounts }: Props) {
     const [history, setHistory] = useState<TokenHistoryEntry[]>([]);
@@ -207,7 +207,7 @@ export default function CachePanel({ accounts }: Props) {
     }, [filteredHistory]);
 
     if (loading) {
-        return <div className="cache-panel"><div className="cache-loading">加载中…</div></div>;
+        return <div className="cache-panel"><div className="cache-loading">Đang tải dữ liệu…</div></div>;
     }
 
     const hitRate = totals.input > 0 ? (totals.cached / totals.input) * 100 : 0;
@@ -215,45 +215,45 @@ export default function CachePanel({ accounts }: Props) {
     return (
         <div className="cache-panel">
             <div className="cache-header">
-                <h2>Prompt Cache 面板</h2>
+                <h2>Prompt Cache</h2>
                 <div className="cache-controls">
                     <select value={days} onChange={e => setDays(Number(e.target.value))}>
-                        <option value={1}>近 24 小时</option>
-                        <option value={7}>近 7 天</option>
-                        <option value={30}>近 30 天</option>
-                        <option value={90}>近 90 天</option>
+                        <option value={1}>Trong 24 giờ</option>
+                        <option value={7}>Trong 7 ngày</option>
+                        <option value={30}>Trong 30 ngày</option>
+                        <option value={90}>Trong 90 ngày</option>
                     </select>
-                    <label className="cache-toggle" title="早期版本没记 account_id 的历史条目">
+                    <label className="cache-toggle" title="Ẩn các bản ghi cũ chưa lưu account_id">
                         <input
                             type="checkbox"
                             checked={hideUnknown}
                             onChange={e => setHideUnknown(e.target.checked)}
                         />
-                        <span>隐藏旧数据{hiddenCount > 0 ? `（${hiddenCount}）` : ''}</span>
+                        <span>Ẩn dữ liệu cũ{hiddenCount > 0 ? ` (${hiddenCount})` : ''}</span>
                     </label>
-                    <button onClick={refresh}>刷新</button>
+                    <button onClick={refresh}>Cập nhật</button>
                 </div>
             </div>
 
             {/* KPI 行 */}
             <div className="cache-kpi-row">
                 <div className="kpi-tile kpi-green">
-                    <div className="kpi-label">命中率</div>
+                    <div className="kpi-label">Tỷ lệ cache hit</div>
                     <div className="kpi-value">{hitRate.toFixed(1)}%</div>
                     <div className="kpi-sub">cached / input</div>
                 </div>
                 <div className="kpi-tile kpi-blue">
-                    <div className="kpi-label">节省</div>
+                    <div className="kpi-label">Chi phí tiết kiệm</div>
                     <div className="kpi-value">{formatUsd(totals.saved)}</div>
-                    <div className="kpi-sub">vs 全价 input</div>
+                    <div className="kpi-sub">so với input không cache</div>
                 </div>
                 <div className="kpi-tile kpi-purple">
-                    <div className="kpi-label">总花费</div>
+                    <div className="kpi-label">Tổng chi phí</div>
                     <div className="kpi-value">{formatUsd(totals.cost)}</div>
-                    <div className="kpi-sub">{totals.req} 次请求</div>
+                    <div className="kpi-sub">{totals.req} yêu cầu</div>
                 </div>
                 <div className="kpi-tile kpi-orange">
-                    <div className="kpi-label">活跃 session 绑定</div>
+                    <div className="kpi-label">Session đang được giữ</div>
                     <div className="kpi-value">{bindings.length}</div>
                     <div className="kpi-sub">evidence-based</div>
                 </div>
@@ -261,18 +261,18 @@ export default function CachePanel({ accounts }: Props) {
 
             {/* 时间序列：命中率 */}
             <div className="cache-card">
-                <div className="cache-card-title">命中率（按小时）</div>
+                <div className="cache-card-title">Tỷ lệ cache hit theo giờ</div>
                 {timeSeries.length === 0 ? (
-                    <div className="cache-empty">暂无数据</div>
+                    <div className="cache-empty">Chưa có dữ liệu</div>
                 ) : (
                     <ResponsiveContainer width="100%" height={220}>
                         <AreaChart data={timeSeries}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#3a3a3a" />
-                            <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#888" />
-                            <YAxis tick={{ fontSize: 11 }} stroke="#888" tickFormatter={(v) => `${v.toFixed(0)}%`} domain={[0, 100]} />
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                            <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="var(--chart-axis)" />
+                            <YAxis tick={{ fontSize: 11 }} stroke="var(--chart-axis)" tickFormatter={(v) => `${v.toFixed(0)}%`} domain={[0, 100]} />
                             <Tooltip
                                 formatter={(v: any, name: any) => name === 'hitRate' ? `${(+v).toFixed(1)}%` : v}
-                                contentStyle={{ background: '#222', border: '1px solid #444' }}
+                                contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--chart-tooltip-border)', borderRadius: 8, boxShadow: 'var(--chart-tooltip-shadow)', color: 'var(--text-primary)' }}
                             />
                             <Area type="monotone" dataKey="hitRate" stroke={COLORS.cached} fill={COLORS.cached} fillOpacity={0.3} />
                         </AreaChart>
@@ -282,18 +282,18 @@ export default function CachePanel({ accounts }: Props) {
 
             {/* 按模型 bar chart */}
             <div className="cache-card">
-                <div className="cache-card-title">按模型 token 分布（cached vs uncached vs output）</div>
+                <div className="cache-card-title">Token theo model (cached, uncached và output)</div>
                 {perModel.length === 0 ? (
-                    <div className="cache-empty">暂无数据</div>
+                    <div className="cache-empty">Chưa có dữ liệu</div>
                 ) : (
                     <ResponsiveContainer width="100%" height={260}>
                         <BarChart data={perModel}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#3a3a3a" />
-                            <XAxis dataKey="model" tick={{ fontSize: 11 }} stroke="#888" />
-                            <YAxis tick={{ fontSize: 11 }} stroke="#888" tickFormatter={formatTokens} />
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                            <XAxis dataKey="model" tick={{ fontSize: 11 }} stroke="var(--chart-axis)" />
+                            <YAxis tick={{ fontSize: 11 }} stroke="var(--chart-axis)" tickFormatter={formatTokens} />
                             <Tooltip
                                 formatter={(v: any) => formatTokens(+v)}
-                                contentStyle={{ background: '#222', border: '1px solid #444' }}
+                                contentStyle={{ background: 'var(--chart-tooltip-bg)', border: '1px solid var(--chart-tooltip-border)', borderRadius: 8, boxShadow: 'var(--chart-tooltip-shadow)', color: 'var(--text-primary)' }}
                             />
                             <Legend wrapperStyle={{ fontSize: 12 }} />
                             <Bar dataKey="cached" stackId="a" fill={COLORS.cached} name="Cached input" />
@@ -306,27 +306,27 @@ export default function CachePanel({ accounts }: Props) {
 
             {/* 按账号表格 */}
             <div className="cache-card">
-                <div className="cache-card-title">按账号</div>
+                <div className="cache-card-title">Theo tài khoản</div>
                 {perAccount.length === 0 ? (
-                    <div className="cache-empty">暂无数据</div>
+                    <div className="cache-empty">Chưa có dữ liệu</div>
                 ) : (
                     <table className="cache-table">
                         <thead>
                             <tr>
-                                <th>账号</th>
-                                <th>请求数</th>
+                                <th>Tài khoản</th>
+                                <th>Yêu cầu</th>
                                 <th>Input</th>
                                 <th>Cached</th>
-                                <th>命中率</th>
+                                <th>Cache hit</th>
                                 <th>Output</th>
-                                <th>花费</th>
-                                <th>节省</th>
+                                <th>Chi phí</th>
+                                <th>Tiết kiệm</th>
                             </tr>
                         </thead>
                         <tbody>
                             {perAccount.map(a => (
                                 <tr key={a.id} className={a.isUnknown ? 'cache-row-unknown' : ''}>
-                                    <td className="cache-table-name" title={a.isUnknown ? '本字段是这次新增的，旧条目里没有，不能事后追溯' : a.id}>{a.name}</td>
+                                    <td className="cache-table-name" title={a.isUnknown ? 'Bản ghi cũ không có account_id nên không thể xác định lại tài khoản' : a.id}>{a.name}</td>
                                     <td>{a.requests}</td>
                                     <td>{formatTokens(a.input)}</td>
                                     <td className="cache-cached">{formatTokens(a.cached)}</td>
@@ -343,18 +343,18 @@ export default function CachePanel({ accounts }: Props) {
 
             {/* Session 绑定表 */}
             <div className="cache-card">
-                <div className="cache-card-title">活跃 Session 绑定（evidence-based stickiness）</div>
+                <div className="cache-card-title">Session đang được giữ theo cache</div>
                 {bindings.length === 0 ? (
-                    <div className="cache-empty">还没有任何 session 命中过 cache</div>
+                    <div className="cache-empty">Chưa có session nào dùng lại cache</div>
                 ) : (
                     <table className="cache-table">
                         <thead>
                             <tr>
                                 <th>Session Key</th>
-                                <th>绑定账号</th>
-                                <th>命中次数</th>
-                                <th>累计 cached tokens</th>
-                                <th>年龄</th>
+                                <th>Tài khoản</th>
+                                <th>Số lần cache hit</th>
+                                <th>Tổng cached token</th>
+                                <th>Thời gian giữ</th>
                             </tr>
                         </thead>
                         <tbody>

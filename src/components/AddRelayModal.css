@@ -4,21 +4,21 @@
  * file is portable. */
 
 .cs-relay-modal {
-    --r-bg-app: #0f172a;
-    --r-bg-chrome: #334155;
-    --r-bg-elevated: #1e293b;
-    --r-bg-input: #0f172a;
-    --r-border: #1e293b;
-    --r-border-strong: #334155;
-    --r-fg-1: #e2e8f0;
-    --r-fg-2: #94a3b8;
-    --r-fg-muted: #64748b;
-    --r-accent-blue: #3b82f6;
-    --r-accent-purple: #8b5cf6;
-    --r-accent-purple-hover: #7c3aed;
-    --r-accent-green: #10b981;
-    --r-accent-red: #ef4444;
-    --r-accent-amber: #f59e0b;
+    --r-bg-app: var(--bg-primary);
+    --r-bg-chrome: var(--card-bg);
+    --r-bg-elevated: var(--section-bg);
+    --r-bg-input: var(--input-bg);
+    --r-border: var(--border-color);
+    --r-border-strong: var(--input-border);
+    --r-fg-1: var(--text-primary);
+    --r-fg-2: var(--text-secondary);
+    --r-fg-muted: var(--text-muted);
+    --r-accent-blue: var(--primary-color);
+    --r-accent-purple: var(--purple-color);
+    --r-accent-purple-hover: var(--primary-hover);
+    --r-accent-green: var(--success-color);
+    --r-accent-red: var(--danger-color);
+    --r-accent-amber: var(--warning-color);
     --r-font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 }
 
@@ -381,7 +381,7 @@
 .cs-rbtn--purple { background: var(--r-accent-purple); color: #fff; border-color: var(--r-accent-purple); }
 .cs-rbtn--purple:hover:not(:disabled) { background: var(--r-accent-purple-hover); border-color: var(--r-accent-purple-hover); }
 .cs-rbtn--ghost { background: transparent; color: var(--r-fg-2); border-color: var(--r-border-strong); }
-.cs-rbtn--ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.05); color: var(--r-fg-1); }
+.cs-rbtn--ghost:hover:not(:disabled) { background: var(--hover-bg); color: var(--r-fg-1); }
 
 /* Error */
 .cs-rerror {
@@ -390,7 +390,7 @@
     background: rgba(239, 68, 68, 0.10);
     border: 1px solid rgba(239, 68, 68, 0.32);
     border-radius: 8px;
-    color: #fca5a5;
+    color: var(--danger-color);
     font-size: 12px;
     line-height: 1.5;
 }
