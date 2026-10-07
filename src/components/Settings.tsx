@@ -1034,7 +1034,7 @@ export function Settings({ accounts = [], onSetSessionAnchor }: SettingsProps = 
                 <div className="setting-item">
                     <div className="setting-info">
                         <span className="setting-label">Codex Switcher</span>
-                        <span className="setting-desc">Tự chuyển nhiều tài khoản, proxy cục bộ và thống kê sử dụng.</span>
+                        <span className="setting-desc">Tự chuyển nhiều tài khoản, proxy cục bộ và thống kê sử dụng. Bản quyền © 2026 Trần Đăng Khoa.</span>
                     </div>
                     <a
                         className="action-button github-link"

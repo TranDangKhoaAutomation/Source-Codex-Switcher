@@ -9,7 +9,7 @@ Codex Switcher là ứng dụng desktop quản lý nhiều tài khoản Codex, t
 
 Ứng dụng hỗ trợ tài khoản ChatGPT OAuth, OpenAI API Key, Relay, Coding Plan và tài khoản từ máy chủ từ xa trong cùng một giao diện.
 
-> Trạng thái hiện tại: phiên bản `0.7.22`.
+> Trạng thái hiện tại: phiên bản `0.7.23`.
 
 ## Điểm nổi bật
 
@@ -508,5 +508,7 @@ Khi gửi thay đổi:
 ## Nguồn và giấy phép
 
 Dự án được phát triển từ mã nguồn Codex Switcher và tiếp tục được tùy chỉnh cho quy trình sử dụng nhiều tài khoản, proxy cục bộ và giao diện tiếng Việt.
+
+**Bản quyền phần phát triển và tùy chỉnh © 2026 Trần Đăng Khoa.** Phần mã nguồn gốc vẫn được ghi công theo nội dung trong tệp giấy phép.
 
 Phát hành theo giấy phép MIT. Xem [LICENSE](LICENSE).
