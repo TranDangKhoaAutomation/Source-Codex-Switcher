@@ -1,6 +1,6 @@
 [package]
 name = "codex-switcher"
-version = "0.7.23"
+version = "0.7.24"
 description = "Codex 多账号智能切换 + 本地代理 + 用量统计"
 authors = ["Trần Đăng Khoa"]
 edition = "2021"

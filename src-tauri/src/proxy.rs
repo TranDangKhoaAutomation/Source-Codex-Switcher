@@ -7225,10 +7225,15 @@ fn current_rate_limits_advisory(state: &ProxyState) -> Option<tungstenite::Messa
     Some(tungstenite::Message::Text(value.to_string().into()))
 }
 
+const DESKTOP_QUOTA_FLOOR_PERCENT: f64 = 2.0;
+const DESKTOP_QUOTA_USED_CEILING_PERCENT: f64 = 98.0;
+const DESKTOP_QUOTA_FLOOR_FRACTION: f64 = 0.02;
+
 /// Keep Codex Desktop's composer usable even when the upstream account pool is
-/// temporarily exhausted. Only a real zero is presented as the 1% safety
-/// floor; every value above 1% is preserved exactly so account switches still
-/// refresh the UI with the replacement account's actual quota.
+/// temporarily exhausted. Desktop may lock its composer at the 1% boundary,
+/// so unsafe 0%/1% advisories are presented as a 2% safety floor. Healthy
+/// values above that boundary are preserved exactly, allowing an account
+/// switch to refresh the UI with the replacement account's real quota.
 fn protect_desktop_rate_limits(msg: tungstenite::Message) -> tungstenite::Message {
     let tungstenite::Message::Text(text) = msg else {
         return msg;
@@ -7244,28 +7249,36 @@ fn protect_desktop_rate_limits(msg: tungstenite::Message) -> tungstenite::Messag
         let Some(window) = window.as_object_mut() else {
             return;
         };
-        if window
+        let at_lock_boundary = window
             .get("used_percent")
             .and_then(|v| v.as_f64())
-            .is_some_and(|used| used >= 100.0)
-        {
-            window.insert("used_percent".into(), serde_json::json!(99.0));
-        }
-        if window
-            .get("remaining_percent")
-            .and_then(|v| v.as_f64())
-            .is_some_and(|remaining| remaining <= 0.0)
-        {
-            window.insert("remaining_percent".into(), serde_json::json!(1.0));
-        }
-        if window
-            .get("remaining_fraction")
-            .and_then(|v| v.as_f64())
-            .is_some_and(|remaining| remaining <= 0.0)
-        {
-            window.insert("remaining_fraction".into(), serde_json::json!(0.01));
-        }
-        if window.get("limit_reached").and_then(|v| v.as_bool()) == Some(true) {
+            .is_some_and(|used| used >= 99.0)
+            || window
+                .get("remaining_percent")
+                .and_then(|v| v.as_f64())
+                .is_some_and(|remaining| remaining <= 1.0)
+            || window
+                .get("remaining_fraction")
+                .and_then(|v| v.as_f64())
+                .is_some_and(|remaining| remaining <= 0.01)
+            || window.get("limit_reached").and_then(|v| v.as_bool()) == Some(true);
+
+        if at_lock_boundary {
+            // Populate the complete trio even when upstream omitted one of the
+            // fields. Desktop versions differ in which field they trust when
+            // deciding whether the composer should be disabled.
+            window.insert(
+                "used_percent".into(),
+                serde_json::json!(DESKTOP_QUOTA_USED_CEILING_PERCENT),
+            );
+            window.insert(
+                "remaining_percent".into(),
+                serde_json::json!(DESKTOP_QUOTA_FLOOR_PERCENT),
+            );
+            window.insert(
+                "remaining_fraction".into(),
+                serde_json::json!(DESKTOP_QUOTA_FLOOR_FRACTION),
+            );
             window.insert("limit_reached".into(), serde_json::json!(false));
         }
     }
@@ -7301,9 +7314,9 @@ fn protect_desktop_rate_limits(msg: tungstenite::Message) -> tungstenite::Messag
         limits.insert(
             "primary_window".into(),
             serde_json::json!({
-                "used_percent": 99.0,
-                "remaining_percent": 1.0,
-                "remaining_fraction": 0.01,
+                "used_percent": DESKTOP_QUOTA_USED_CEILING_PERCENT,
+                "remaining_percent": DESKTOP_QUOTA_FLOOR_PERCENT,
+                "remaining_fraction": DESKTOP_QUOTA_FLOOR_FRACTION,
                 "limit_reached": false
             }),
         );
@@ -9810,7 +9823,7 @@ mod tests {
     }
 
     #[test]
-    fn desktop_quota_protection_never_forwards_zero_percent() {
+    fn desktop_quota_protection_never_forwards_the_composer_lock_boundary() {
         let msg = tungstenite::Message::Text(
             serde_json::json!({
                 "type": "codex.rate_limits",
@@ -9835,10 +9848,37 @@ mod tests {
         let limits = &value["rate_limits"];
         assert_eq!(limits["allowed"], true);
         assert_eq!(limits["limit_reached"], false);
-        assert_eq!(limits["primary_window"]["used_percent"], 99.0);
-        assert_eq!(limits["primary_window"]["remaining_percent"], 1.0);
-        assert_eq!(limits["primary_window"]["remaining_fraction"], 0.01);
+        assert_eq!(limits["primary_window"]["used_percent"], 98.0);
+        assert_eq!(limits["primary_window"]["remaining_percent"], 2.0);
+        assert_eq!(limits["primary_window"]["remaining_fraction"], 0.02);
         assert_eq!(limits["primary_window"]["limit_reached"], false);
+    }
+
+    #[test]
+    fn desktop_quota_protection_moves_exactly_one_percent_above_lock_boundary() {
+        let msg = tungstenite::Message::Text(
+            serde_json::json!({
+                "type": "codex.rate_limits",
+                "rate_limits": {
+                    "allowed": true,
+                    "primary_window": {"used_percent": 99},
+                    "secondary_window": {"remaining_percent": 1}
+                }
+            })
+            .to_string()
+            .into(),
+        );
+        let tungstenite::Message::Text(text) = protect_desktop_rate_limits(msg) else {
+            panic!("expected text frame");
+        };
+        let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+        for key in ["primary_window", "secondary_window"] {
+            let window = &value["rate_limits"][key];
+            assert_eq!(window["used_percent"], 98.0);
+            assert_eq!(window["remaining_percent"], 2.0);
+            assert_eq!(window["remaining_fraction"], 0.02);
+            assert_eq!(window["limit_reached"], false);
+        }
     }
 
     #[test]
